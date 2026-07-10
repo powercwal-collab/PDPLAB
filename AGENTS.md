@@ -11,3 +11,5 @@ When implementing from a selected generated mock, treat that image as the source
 - Match the supplied GEOBase dashboard references: white rounded app canvas, pale blue-gray surround, grouped left navigation, pale-blue active rows with electric-blue right rule, thin gray panel borders, generous radii, restrained enterprise analytics.
 - Product-specific rule: overall PDP uses stars; individual modules use only 弱 / 中 / 强.
 - Keep the first screen conclusion-led and focused on score, gaps, module maturity, and the P0 route.
+- Overall diagnosis card must keep a spacious left/right composition: numeric score on the left; overall stars, page type, explanation, and T1 target on the right.
+- The pre-upload starting state should contain only project selection and PDP content upload as its core tasks.

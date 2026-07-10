@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   SquaresFour, ClipboardText, ChartBar, ImageSquare, Sparkle, Gear,
   CaretDown, CaretUp, ArrowRight, CheckCircle, WarningCircle, XCircle,
-  UploadSimple, MagnifyingGlass, Bell, DotsThree, TrendUp
+  UploadSimple, MagnifyingGlass, Bell, DotsThree, TrendUp, FileImage, CaretRight
 } from '@phosphor-icons/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import './styles.css';
@@ -96,7 +96,7 @@ export function App() {
             </div>
             <div className="top-actions">
               <button className="icon-button" aria-label="通知"><Bell size={20} /></button>
-              <button className="secondary" onClick={() => triggerToast('已打开 PDP 导入流程')}><UploadSimple size={18} /> 导入新版本</button>
+              <button className="secondary" onClick={() => setActive('导入 PDP')}><UploadSimple size={18} /> 导入新版本</button>
               <button className="primary" onClick={() => {setActive('优化路线'); triggerToast('已进入 P0 优化路线');}}>查看 P0 优化路线 <ArrowRight size={18} /></button>
             </div>
           </header>
@@ -106,6 +106,7 @@ export function App() {
           {active === '优化路线' && (
             <TaskRoute query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} visibleTasks={visibleTasks} expanded={expanded} setExpanded={setExpanded} onGenerate={() => triggerToast('已创建品牌资产匹配任务')} />
           )}
+          {active === '导入 PDP' && <UploadPage onCancel={() => setActive('项目总览')} onFinish={() => { setActive('评分诊断'); triggerToast('PDP 已上传，正在进入评分确认'); }} />}
           {['品牌资产', 'AI 创作', '设置'].includes(active) && <FuturePage title={active} onBack={() => setActive('项目总览')} />}
         </main>
       </div>
@@ -119,8 +120,12 @@ function Dashboard({ onRoute }) {
     <section className="panel score-panel">
       <div className="panel-head"><div><small>核心结论</small><h2>整体诊断</h2></div><span className="date-pill">评估于 2026.07.10</span></div>
       <div className="score-body">
-        <div className="score-number"><strong>58</strong><span>/ 100</span><em>4.5 星</em></div>
-        <div className="score-copy"><h3>完整说明增强页</h3><p>页面信息基本完整，但场景、证明与尺码决策仍存在明显阻力。</p><div className="tier-row"><span>当前 T1-minus</span><ArrowRight /><b>目标 T1 强</b></div></div>
+        <div className="score-number"><strong>58</strong><span>/ 100</span></div>
+        <div className="score-copy">
+          <div className="score-copy-head"><div><small>整体星级</small><strong>4.5 星</strong></div><span>完整说明增强页</span></div>
+          <p>页面信息基本完整，但场景、证明与尺码决策仍存在明显阻力。</p>
+          <div className="tier-row"><span>当前 T1-minus</span><ArrowRight /><b>目标 T1 强</b></div>
+        </div>
       </div>
       <div className="star-track"><div className="track-line"><span style={{width:'58%'}}></span><i style={{left:'58%'}}>58</i></div><div className="track-labels"><span>3 星<br/><small>基础说明</small></span><span>4 星<br/><small>完整说明</small></span><span className="current">4.5 星<br/><small>当前</small></span><span>5 星<br/><small>成熟转化</small></span><span>6 星<br/><small>专业决策</small></span></div></div>
       <div className="why-row"><WarningCircle weight="fill" /><p><b>为什么还不是 5 星：</b>高权重模块仍停留在“有信息、弱证明”，未形成稳定的购买说服链路。</p></div>
@@ -149,6 +154,33 @@ function Dashboard({ onRoute }) {
 function GapTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   return <div className="chart-tip"><b>{payload[0].payload.name}</b><span>最高可提升 {payload[0].value} 分</span><small>点击进入证据详情</small></div>;
+}
+
+function UploadPage({ onCancel, onFinish }) {
+  const [project, setProject] = useState('');
+  const [fileName, setFileName] = useState('');
+  return <section className="upload-page">
+    <div className="upload-intro"><span>开始一次诊断</span><h2>选择项目并上传 PDP 内容</h2><p>支持长图、截图、PDF 或网页导出文件。</p></div>
+    <div className="upload-steps">
+      <div className="upload-step">
+        <div className="step-index">01</div>
+        <div className="step-main"><small>选择项目</small><h3>这份 PDP 属于哪个项目？</h3>
+          <label className="project-select"><select value={project} onChange={e=>setProject(e.target.value)}><option value="">请选择已有项目</option><option>Nike Kids｜毛毛虫幼童学步鞋</option><option>Nike Kids｜儿童篮球鞋系列</option><option>创建新项目</option></select><CaretDown /></label>
+        </div>
+        {project && <CheckCircle className="step-done" weight="fill" />}
+      </div>
+      <CaretRight className="step-arrow" />
+      <div className={`upload-step ${!project ? 'disabled' : ''}`}>
+        <div className="step-index">02</div>
+        <div className="step-main"><small>上传内容</small><h3>添加待诊断的 PDP</h3>
+          <button className={`drop-zone ${fileName ? 'has-file' : ''}`} disabled={!project} onClick={()=>setFileName('Nike_Kids_PDP_v1.png')}>
+            {fileName ? <><CheckCircle size={28} weight="fill"/><span><b>{fileName}</b><small>已准备完成 · 点击重新选择</small></span></> : <><FileImage size={30}/><span><b>点击选择或拖入文件</b><small>PNG、JPG、PDF，最大 30MB</small></span></>}
+          </button>
+        </div>
+      </div>
+    </div>
+    <div className="upload-footer"><button className="secondary" onClick={onCancel}>取消</button><button className="primary" disabled={!project || !fileName} onClick={onFinish}>开始识别 <ArrowRight /></button></div>
+  </section>;
 }
 
 function Diagnosis() {

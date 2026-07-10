@@ -2,6 +2,8 @@
 
 - Source visual truth: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-dashboard-references/geobase-dashboard.png` and `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-dashboard-references/geobase-ranking.png`
 - Implementation screenshot: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/prototype-overview-1440x1024.png`
+- Revised implementation screenshot: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/prototype-overview-v2.png`
+- Empty upload state screenshot: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/prototype-upload-empty.png`
 - Full-view comparison: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/design-qa-comparison.png`
 - Focused comparison: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/design-qa-focused.png`
 - Viewport: 1440 × 1024
@@ -29,6 +31,8 @@ No actionable P0/P1/P2 fidelity findings remain.
 
 - Initial browser-rendered pass: no P0/P1/P2 issues found, so no blocking visual-fix iteration was required.
 - Full-view and focused comparisons confirm the source's navigation density, panel geometry, token system, and analytical layout are preserved.
+- User feedback iteration: the overall diagnosis content was too compressed at the active browser width. It was rebuilt as a fixed left/right composition with 32px column gap; the 4.5-star rating, page type, explanation, and T1 target now sit on the right. The revised screenshot confirms clean wrapping and separation.
+- Added and browser-tested the empty pre-upload state. Project selection gates the upload control, selecting a project enables upload, and choosing a file enables the primary action. No console errors were recorded.
 
 ## Follow-up polish
 
