@@ -4,6 +4,8 @@
 - Implementation screenshot: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/prototype-overview-1440x1024.png`
 - Revised implementation screenshot: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/prototype-overview-v2.png`
 - Empty upload state screenshot: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/prototype-upload-empty.png`
+- Home entry screenshot: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/prototype-home.png`
+- Project switcher screenshot: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/prototype-project-switcher.png`
 - Full-view comparison: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/design-qa-comparison.png`
 - Focused comparison: `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/design-qa-focused.png`
 - Viewport: 1440 × 1024
@@ -33,6 +35,8 @@ No actionable P0/P1/P2 fidelity findings remain.
 - Full-view and focused comparisons confirm the source's navigation density, panel geometry, token system, and analytical layout are preserved.
 - User feedback iteration: the overall diagnosis content was too compressed at the active browser width. It was rebuilt as a fixed left/right composition with 32px column gap; the 4.5-star rating, page type, explanation, and T1 target now sit on the right. The revised screenshot confirms clean wrapping and separation.
 - Added and browser-tested the empty pre-upload state. Project selection gates the upload control, selecting a project enables upload, and choosing a file enables the primary action. No console errors were recorded.
+- Added the new default home entry based on the supplied Lovart hierarchy: one dominant upload action and a recent-project grid. Browser testing confirms an existing project opens 项目总览, upload opens the empty import state, and completing import opens 项目总览. No console errors were recorded.
+- Separated the home from the workbench shell and added explicit 返回首页 and 切换项目 controls. The project switcher opens recent projects, updates the current breadcrumb, returns to 项目总览, and closes after selection. No console errors were recorded.
 
 ## Follow-up polish
 

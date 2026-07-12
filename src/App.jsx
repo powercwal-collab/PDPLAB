@@ -3,9 +3,12 @@ import {
   SquaresFour, ClipboardText, ChartBar, ImageSquare, Sparkle, Gear,
   CaretDown, CaretUp, ArrowRight, CheckCircle, WarningCircle, XCircle,
   UploadSimple, MagnifyingGlass, Bell, DotsThree, TrendUp, FileImage, CaretRight
+  , House, Plus, FolderOpen
 } from '@phosphor-icons/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import './styles.css';
+import './home-overrides.css';
+import { AnalysisPage, ScoreReviewPage, AssetMatchPage, GenerationPage, FinalPage, RescorePage } from './WorkflowPages.jsx';
 
 const modules = [
   { name: '产品KV/封面故事', short: '产品KV', score: 5, max: 10, maturity: '中' },
@@ -29,7 +32,7 @@ const tasks = [
 ];
 
 const nav = [
-  { group: '工作台', items: [['项目总览', SquaresFour], ['评分诊断', ClipboardText], ['优化路线', ChartBar]] },
+  { group: '工作台', items: [['首页', House], ['项目总览', SquaresFour], ['评分诊断', ClipboardText], ['优化路线', ChartBar]] },
   { group: '资源中心', items: [['品牌资产', ImageSquare], ['AI 创作', Sparkle]] },
   { group: '系统', items: [['设置', Gear]] },
 ];
@@ -47,7 +50,10 @@ function StatusIcon({ maturity }) {
 }
 
 export function App() {
-  const [active, setActive] = useState('项目总览');
+  const [active, setActive] = useState('首页');
+  const [currentProject, setCurrentProject] = useState('Nike Kids｜毛毛虫幼童学步鞋');
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [generationAssets, setGenerationAssets] = useState(['a1','a2','a3']);
   const [expanded, setExpanded] = useState('P0-01');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('全部');
@@ -63,9 +69,11 @@ export function App() {
     window.setTimeout(() => setToast(''), 2400);
   };
 
+  const isStandalone = active === '首页' || active === '导入 PDP' || active === '诊断进度';
+
   return (
     <div className="page-bg">
-      <div className="app-shell">
+      <div className={isStandalone ? 'app-shell home-mode' : 'app-shell'}>
         <aside className="sidebar">
           <div className="brand"><span>PDP</span><b>Lab</b></div>
           <div className="side-nav">
@@ -88,26 +96,43 @@ export function App() {
           </div>
         </aside>
 
-        <main className="main">
-          <header className="topbar">
+        <main className={isStandalone ? 'main home-main' : 'main'}>
+          {!isStandalone && <header className="topbar">
             <div>
-              <div className="breadcrumb">项目 / Nike Kids / 毛毛虫幼童学步鞋</div>
+              <div className="breadcrumb">项目 / {currentProject}</div>
               <h1>{active}</h1>
             </div>
             <div className="top-actions">
+              <button className="back-home" onClick={() => setActive('首页')}><House size={18} /> 返回首页</button>
+              <div className="project-switcher">
+                <button className="switch-project" onClick={() => setProjectMenuOpen(!projectMenuOpen)}><FolderOpen size={18} /><span>切换项目</span><CaretDown size={13} /></button>
+                {projectMenuOpen && <div className="project-menu">
+                  {['Nike Kids｜毛毛虫幼童学步鞋','Nike Kids｜儿童足球球衣','Nike Running｜城市轻跑鞋'].map(name => <button className={name === currentProject ? 'selected' : ''} key={name} onClick={() => { setCurrentProject(name); setActive('项目总览'); setProjectMenuOpen(false); triggerToast(`已切换至 ${name}`); }}><span>{name}</span>{name === currentProject && <CheckCircle weight="fill" />}</button>)}
+                  <button className="menu-new" onClick={() => { setActive('导入 PDP'); setProjectMenuOpen(false); }}><Plus /> 新建诊断项目</button>
+                </div>}
+              </div>
               <button className="icon-button" aria-label="通知"><Bell size={20} /></button>
               <button className="secondary" onClick={() => setActive('导入 PDP')}><UploadSimple size={18} /> 导入新版本</button>
               <button className="primary" onClick={() => {setActive('优化路线'); triggerToast('已进入 P0 优化路线');}}>查看 P0 优化路线 <ArrowRight size={18} /></button>
             </div>
-          </header>
+          </header>}
 
+          {active === '首页' && <HomePage onOpenProject={(name) => { setCurrentProject(name); setActive('项目总览'); }} onImport={() => setActive('导入 PDP')} />}
           {active === '项目总览' && <Dashboard onRoute={() => setActive('优化路线')} />}
           {active === '评分诊断' && <Diagnosis />}
           {active === '优化路线' && (
-            <TaskRoute query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} visibleTasks={visibleTasks} expanded={expanded} setExpanded={setExpanded} onGenerate={() => triggerToast('已创建品牌资产匹配任务')} />
+            <TaskRoute query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} visibleTasks={visibleTasks} expanded={expanded} setExpanded={setExpanded} onGenerate={() => { setActive('品牌资产匹配'); triggerToast('已创建品牌资产匹配任务'); }} />
           )}
-          {active === '导入 PDP' && <UploadPage onCancel={() => setActive('项目总览')} onFinish={() => { setActive('评分诊断'); triggerToast('PDP 已上传，正在进入评分确认'); }} />}
-          {['品牌资产', 'AI 创作', '设置'].includes(active) && <FuturePage title={active} onBack={() => setActive('项目总览')} />}
+          {active === '导入 PDP' && <UploadPage onCancel={() => setActive('首页')} onFinish={() => { setActive('诊断进度'); triggerToast('PDP 已上传，诊断任务已开始'); }} />}
+          {active === '诊断进度' && <AnalysisPage onBack={() => setActive('首页')} onReview={() => setActive('评分确认')} />}
+          {active === '评分确认' && <ScoreReviewPage onConfirm={() => { setActive('项目总览'); triggerToast('评分版本 v1 已锁定'); }} />}
+          {active === '品牌资产匹配' && <AssetMatchPage onGenerate={(ids) => { setGenerationAssets(ids); setActive('AI 生成'); }} />}
+          {active === '品牌资产' && <AssetMatchPage onGenerate={(ids) => { setGenerationAssets(ids); setActive('AI 生成'); }} />}
+          {active === 'AI 生成' && <GenerationPage assetIds={generationAssets} onComplete={() => setActive('最终优化页面')} />}
+          {active === 'AI 创作' && <GenerationPage assetIds={generationAssets} onComplete={() => setActive('最终优化页面')} />}
+          {active === '最终优化页面' && <FinalPage onBackTasks={() => setActive('优化路线')} onRescore={() => setActive('复评结果')} />}
+          {active === '复评结果' && <RescorePage onFinish={() => { setActive('项目总览'); triggerToast('本轮优化已完成并归档'); }} />}
+          {active === '设置' && <FuturePage title={active} onBack={() => setActive('项目总览')} />}
         </main>
       </div>
       {toast && <div className="toast"><CheckCircle weight="fill" />{toast}</div>}
@@ -154,6 +179,36 @@ function Dashboard({ onRoute }) {
 function GapTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   return <div className="chart-tip"><b>{payload[0].payload.name}</b><span>最高可提升 {payload[0].value} 分</span><small>点击进入证据详情</small></div>;
+}
+
+function HomePage({ onOpenProject, onImport }) {
+  const projects = [
+    { name: 'Nike Kids｜毛毛虫幼童学步鞋', date: '更新于 2026.07.10', score: '4.5 星', image: '/projects/nike-kids-learning-shoe.png' },
+    { name: 'Nike Kids｜儿童足球球衣', date: '更新于 2026.07.08', score: '4 星', image: '/projects/brazil-kids-football-jersey.png' },
+    { name: 'Nike Running｜城市轻跑鞋', date: '更新于 2026.06.30', score: '待复评', image: '' },
+  ];
+  return <div className="home-page">
+    <section className="home-hero">
+      <div className="home-wordmark"><span>PDP</span><b>Lab</b></div>
+      <h1>让每个详情页，都有清晰的优化方向</h1>
+      <p>选择已有项目继续诊断，或上传新的 PDP 开始评分。</p>
+      <button className="home-upload" onClick={onImport}>
+        <div><UploadSimple size={24}/><span><b>上传 PDP 内容</b><small>支持长图、截图、PDF 或网页导出文件</small></span></div>
+        <span className="upload-action">选择文件 <ArrowRight /></span>
+      </button>
+      <div className="home-tags"><span>11 模块评分</span><span>弱 / 中 / 强成熟度</span><span>P0 / P1 / P2 优化路线</span><span>品牌资产匹配</span></div>
+    </section>
+    <section className="recent-projects">
+      <div className="recent-head"><div><small>继续工作</small><h2>最近项目</h2></div><button>查看全部 <ArrowRight /></button></div>
+      <div className="project-grid">
+        <button className="new-project" onClick={onImport}><Plus size={30}/><span>新建诊断项目</span><small>选择项目并上传内容</small></button>
+        {projects.map(project=><button className="project-card" key={project.name} onClick={() => onOpenProject(project.name)}>
+          <div className="project-cover">{project.image ? <img src={project.image} alt=""/> : <FolderOpen size={38}/>}<span>{project.score}</span></div>
+          <strong>{project.name}</strong><small>{project.date}</small>
+        </button>)}
+      </div>
+    </section>
+  </div>;
 }
 
 function UploadPage({ onCancel, onFinish }) {

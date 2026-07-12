@@ -1,0 +1,143 @@
+.app-shell.home-mode {
+  grid-template-columns: 1fr;
+}
+
+.home-mode .sidebar {
+  display: none;
+}
+
+.home-mode .home-main {
+  width: 100%;
+  padding-left: 64px;
+  padding-right: 64px;
+}
+
+/* 1.0 homepage baseline: compact hero and project grid. */
+.home-main { padding-top: 0; padding-bottom: 34px; }
+.home-page { min-height: calc(100vh - 50px); max-width: none; }
+.home-hero { max-width: 920px; margin: 0 auto; text-align: center; padding: 68px 0 55px; }
+.home-wordmark { display: inline-flex; align-items: center; font-size: 20px; font-weight: 800; letter-spacing: -1px; margin-bottom: 13px; }
+.home-wordmark span { background: var(--blue); color: #fff; border-radius: 5px; padding: 3px 6px; margin-right: 4px; }
+.home-hero h1 { font-size: 31px; line-height: normal; font-weight: 700; letter-spacing: -1px; margin: 0 0 11px; }
+.home-hero > p { font-size: 13px; color: #969da8; margin: 0 0 30px; }
+.home-upload { width: 100%; min-height: 118px; background: #fff; border: 1px solid #d9dfe7; border-radius: 18px; padding: 22px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 8px 24px rgba(37,64,99,.06); text-align: left; transform: none; }
+.home-upload:hover { border-color: #9fc8ff; box-shadow: 0 10px 30px rgba(20,120,248,.1); transform: none; }
+.home-upload > div { display: flex; align-items: center; gap: 15px; color: var(--blue); }
+.home-upload > div > svg { width: 24px; height: 24px; }
+.home-upload > div > span { display: flex; flex-direction: column; }
+.home-upload b { font-size: 15px; color: #2d3440; }
+.home-upload small { font-size: 10px; color: #959ca7; margin-top: 6px; }
+.upload-action { height: 40px; border-radius: 9px; padding: 0 14px; gap: 8px; font-size: 11px; font-weight: 600; }
+.home-tags { gap: 9px; margin-top: 20px; }
+.home-tags span { border-radius: 20px; padding: 7px 11px; font-size: 10px; }
+.recent-projects { max-width: 1180px; margin: 0 auto; }
+.recent-head { margin-bottom: 17px; }
+.recent-head small { font-size: 10px; }
+.recent-head h2 { font-size: 19px; margin: 4px 0 0; }
+.recent-head button { font-size: 11px; gap: 5px; }
+.recent-head svg { width: 13px; }
+.project-grid { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
+.new-project { height: 220px; border-width: 1px; border-radius: 13px; }
+.new-project span { font-size: 12px; margin-top: 10px; }
+.new-project small { font-size: 9px; margin-top: 5px; }
+.project-cover { height: 170px; border-radius: 13px; }
+.project-cover span { right: 10px; top: 10px; padding: 5px 8px; font-size: 9px; }
+.project-card > strong { font-size: 12px; margin: 10px 3px 4px; }
+.project-card > small { font-size: 9px; margin-left: 3px; }
+
+@media (max-width: 820px) {
+  .home-mode .home-main { padding-left: 24px; padding-right: 24px; }
+  .home-hero { padding-top: 48px; }
+  .home-upload { flex-direction: column; align-items: stretch; gap: 18px; }
+  .upload-action { width: 100%; justify-content: center; }
+  .project-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+
+.back-home {
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: #626a76;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.back-home:hover {
+  color: var(--blue);
+}
+
+.project-switcher {
+  position: relative;
+}
+
+.switch-project {
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: #4d5561;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.switch-project:hover {
+  border-color: #a9cfff;
+  color: var(--blue);
+}
+
+.project-menu {
+  position: absolute;
+  right: 0;
+  top: 47px;
+  width: 285px;
+  padding: 8px;
+  border: 1px solid #dfe4ea;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(30, 51, 79, 0.14);
+  z-index: 30;
+}
+
+.project-menu button {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 7px;
+  background: #fff;
+  color: #4e5662;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.project-menu button:hover,
+.project-menu button.selected {
+  background: #f0f6ff;
+  color: var(--blue);
+}
+
+.project-menu button svg {
+  flex: 0 0 auto;
+  color: var(--blue);
+}
+
+.project-menu .menu-new {
+  justify-content: flex-start;
+  border-top: 1px solid #edf0f4;
+  border-radius: 0 0 7px 7px;
+  margin-top: 5px;
+  padding-top: 5px;
+}
