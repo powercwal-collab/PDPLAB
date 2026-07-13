@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight, Check, CheckCircle, CircleNotch, ClockCounterClockwise, FileImage, ImageSquare,
-  LockKey, MagicWand, ShieldCheck, Sparkle, Trash, TrendUp, WarningCircle
+  LockKey, MagicWand, ShieldCheck, Sparkle, Trash, TrendUp, WarningCircle, X
 } from '@phosphor-icons/react';
 import './workflow.css';
 import { api } from './services/api.js';
@@ -32,6 +32,14 @@ function formatConfirmationMode(mode) {
   if (mode === 'ai_auto') return 'AI 自动评分';
   if (mode === 'codex_verified') return 'Codex Skill 校验';
   return '人工修订';
+}
+
+function evidenceObjectPosition(evidence) {
+  const bbox = evidence?.bbox;
+  if (!bbox || !Number.isFinite(Number(bbox.x)) || !Number.isFinite(Number(bbox.y))) return '50% 0%';
+  const centerX = Math.max(0, Math.min(1, Number(bbox.x) + Number(bbox.width || 0) / 2));
+  const centerY = Math.max(0, Math.min(1, Number(bbox.y) + Number(bbox.height || 0) / 2));
+  return `${centerX * 100}% ${centerY * 100}%`;
 }
 
 export function AnalysisPage({ job, onComplete, onBack }) {
@@ -128,6 +136,8 @@ export function DiagnosisHistoryPage({ projectId, projectName, onDeleted, onSele
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState('');
+  const [previewEvidence, setPreviewEvidence] = useState(null);
+  const evidenceImageContainerRef = useRef(null);
   useEffect(() => {
     if (!projectId) { setRecords([]); setLoading(false); return; }
     setLoading(true); setError('');
@@ -141,6 +151,14 @@ export function DiagnosisHistoryPage({ projectId, projectName, onDeleted, onSele
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [deleteTarget, deletingId]);
+  useEffect(() => {
+    if (!previewEvidence) return undefined;
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setPreviewEvidence(null);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [previewEvidence]);
   const selected = records.find(record => record.id === selectedId) || records[0];
   const requestDelete = record => {
     setDeleteError('');
@@ -168,13 +186,44 @@ export function DiagnosisHistoryPage({ projectId, projectName, onDeleted, onSele
       setDeletingId(null);
     }
   };
+  const positionEvidencePreview = event => {
+    const container = evidenceImageContainerRef.current;
+    if (!container) return;
+    if (previewEvidence?.evidence?.is_crop) {
+      container.scrollTop = 0;
+      return;
+    }
+    const y = Number(previewEvidence?.evidence?.bbox?.y || 0);
+    container.scrollTop = Math.max(0, y * event.currentTarget.scrollHeight - container.clientHeight * 0.16);
+  };
   return <section className="diagnosis-history-page">
     <header><div><small>评价审计记录</small><h2>评分版本</h2><p>{projectName} 的每次锁定评分都会保留模块明细、操作者与时间。</p></div><ClockCounterClockwise size={30}/></header>
     {loading && <div className="history-empty"><CircleNotch className="spin"/>正在读取评分记录…</div>}
     {!loading && error && <div className="history-empty error"><WarningCircle/>{error}</div>}
     {!loading && !error && !records.length && <div className="history-empty"><ClockCounterClockwise size={38}/><h3>暂无锁定评分</h3><p>完成 11 个模块检查并锁定后，评分版本会显示在这里。</p></div>}
-    {!loading && selected && <div className="history-layout"><aside className="history-record-list" aria-label="评分版本记录">{records.map(record => <div className={record.id === selected.id ? 'history-record active' : 'history-record'} key={record.id}><button className="history-record-select" onClick={() => selectRecord(record)} aria-pressed={record.id === selected.id}><span><b>评分版本 v{record.version}</b><small>{new Date(record.created_at).toLocaleString('zh-CN')}</small></span><em>{record.overall_rating} 星 · {formatConfirmationMode(record.confirmation_mode)}</em></button><div className="history-record-meta"><strong>{record.total_score}<small>/100</small></strong><button className="history-delete-button" aria-label={`删除评分版本 v${record.version}`} title={`删除评分版本 v${record.version}`} onClick={() => requestDelete(record)}><Trash size={15}/></button></div></div>)}</aside><div className="history-detail"><div className="history-summary"><span><small>锁定总分</small><strong>{selected.total_score}</strong></span><span><small>整体星级</small><strong>{selected.overall_rating} 星</strong></span><span><small>评分方式</small><strong>{formatConfirmationMode(selected.confirmation_mode)}</strong></span><span><small>状态</small><strong>已锁定</strong></span></div><div className="history-module-head"><span>模块</span><span>成熟度</span><span>系数</span><span>得分</span></div>{selected.modules.map(module => <div className="history-module-row" key={module.name}><span>{module.name}</span><em className={module.maturity==='强'?'strong':module.maturity==='弱'?'weak':'medium'}>{module.maturity}</em><span>{module.coefficient}</span><b>{module.score} / {module.max}</b></div>)}</div></div>}
+    {!loading && selected && <div className="history-layout">
+      <aside className="history-record-list" aria-label="评分版本记录">
+        {records.map(record => <div className={record.id === selected.id ? 'history-record active' : 'history-record'} key={record.id}>
+          <button className="history-record-select" onClick={() => selectRecord(record)} aria-pressed={record.id === selected.id}><span><b>评分版本 v{record.version}</b><small>{new Date(record.created_at).toLocaleString('zh-CN')}</small></span><em>{record.overall_rating} 星 · {formatConfirmationMode(record.confirmation_mode)}</em></button>
+          <div className="history-record-meta"><strong>{record.total_score}<small>/100</small></strong><button className="history-delete-button" aria-label={`删除评分版本 v${record.version}`} title={`删除评分版本 v${record.version}`} onClick={() => requestDelete(record)}><Trash size={15}/></button></div>
+        </div>)}
+      </aside>
+      <div className="history-detail">
+        <div className="history-summary"><span><small>锁定总分</small><strong>{selected.total_score}</strong></span><span><small>整体星级</small><strong>{selected.overall_rating} 星</strong></span><span><small>评分方式</small><strong>{formatConfirmationMode(selected.confirmation_mode)}</strong></span><span><small>状态</small><strong>已锁定</strong></span></div>
+        <div className="history-module-head"><span>模块</span><span>证据切片</span><span>成熟度</span><span>系数</span><span>得分</span></div>
+        <div className="history-module-list">{selected.modules.map(module => {
+          const evidenceItems = (module.evidence || []).filter(item => item?.image_url);
+          const evidence = evidenceItems[0];
+          return <div className="history-module-row" key={module.name}>
+            <span>{module.name}</span>
+            {evidence ? <button className="history-evidence-thumb" aria-label={`放大查看${module.name}证据切片`} onClick={() => setPreviewEvidence({ module, evidence, count:evidenceItems.length })}><img src={evidence.image_url} alt="" style={{objectPosition:evidenceObjectPosition(evidence)}}/>{evidenceItems.length > 1 && <i>+{evidenceItems.length - 1}</i>}</button> : <div className="history-evidence-empty" title="该版本未保存证据切片"><ImageSquare size={15}/><span>无切片</span></div>}
+            <em className={module.maturity==='强'?'strong':module.maturity==='弱'?'weak':'medium'}>{module.maturity}</em><span>{module.coefficient}</span><b>{module.score} / {module.max}</b>
+          </div>;
+        })}</div>
+      </div>
+    </div>}
     {deleteTarget && <div className="delete-confirm-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !deletingId) setDeleteTarget(null); }}><section className="delete-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-history-title" aria-describedby="delete-history-description"><div className="delete-confirm-icon"><Trash weight="fill" /></div><div><small>删除评分记录</small><h2 id="delete-history-title">确认删除评分版本 v{deleteTarget.version}？</h2><p id="delete-history-description">删除后将无法恢复该版本及其锁定分值；项目总览会自动切换到剩余的最新评分。</p>{deleteError && <div className="delete-confirm-error"><WarningCircle weight="fill" />{deleteError}</div>}</div><div className="delete-confirm-actions"><button className="secondary" autoFocus disabled={Boolean(deletingId)} onClick={() => setDeleteTarget(null)}>取消</button><button className="danger" disabled={Boolean(deletingId)} onClick={confirmDelete}>{deletingId ? '正在删除…' : '确认删除'}</button></div></section></div>}
+    {previewEvidence && <div className="evidence-lightbox-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setPreviewEvidence(null); }}><section className="evidence-lightbox" role="dialog" aria-modal="true" aria-labelledby="evidence-lightbox-title"><header><div><small>模块证据切片 · 第 {Number(previewEvidence.evidence.page_index || 0) + 1} 段</small><h2 id="evidence-lightbox-title">{previewEvidence.module.name}</h2></div><button aria-label="关闭证据切片预览" onClick={() => setPreviewEvidence(null)}><X size={19}/></button></header><div className="evidence-lightbox-image" ref={evidenceImageContainerRef}><img src={previewEvidence.evidence.image_url} alt={`${previewEvidence.module.name}证据切片`} onLoad={positionEvidencePreview}/></div><footer><div><small>识别内容</small><p>{previewEvidence.evidence.ocr_text || previewEvidence.evidence.model_reason || '该模块已保存页面视觉证据。'}</p></div>{previewEvidence.count > 1 && <span>该模块共 {previewEvidence.count} 条证据，本次展示第 1 条</span>}</footer></section></div>}
   </section>;
 }
 

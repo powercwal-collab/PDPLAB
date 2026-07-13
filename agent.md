@@ -15,12 +15,14 @@
 - 删除图标打开不可恢复操作确认弹窗；支持取消、点击遮罩或 Escape 关闭、删除中禁用、后端错误反馈和成功提示。
 - Django 新增受登录与项目访问范围保护的 `DELETE /api/diagnoses/<id>/`；删除当前版本后回退到第一条剩余记录，删除其他版本时保持当前选择。
 - 评分记录中选中的版本成为工作台当前诊断上下文；项目总览、评分诊断、得分缺口和优化路线均跟随该版本更新。
+- 右侧模块明细保留固定摘要与表头，11 个模块在卡片内部滚动；表头与内容共用同一列网格，并增加真实证据缩略图列。
+- 表格缩略图保持 `48 × 36px` 紧凑裁切；点击后仅在弹窗中按原始宽高比展示完整证据图，超长内容在弹窗图片区内部纵向滚动。
 
 主要改动文件：`src/WorkflowPages.jsx`、`src/App.jsx`、`src/styles.css`、`src/services/api.js`、`backend/diagnosis/views.py`、`backend/diagnosis/urls.py`、`backend/diagnosis/tests.py`、`AGENTS.md`、`design-qa.md`。
 
-验证状态：Django 18/18 测试通过；Vite 生产构建通过；代码与数据边界检查通过。当前 Codex 浏览器控制连接不可用，尚未取得修改后的浏览器截图，因此 3.8 视觉与实际点击验收保持待确认，不覆盖 3.7 已通过的验收结论。
+验证状态：Django 18/18 测试通过；Vite 生产构建通过；1093 × 898 浏览器验收通过。评分记录表格、证据缩略图和弹窗均已实际渲染；弹窗图片区 `clientHeight = 520px`、完整长图 `scrollHeight = 29253px`，图片保持 `object-fit: contain`，表格缩略图保持 `object-fit: cover`。用户已确认弹窗滑动正常。浏览器证据为 `design-qa-score-history-evidence.png` 与 `design-qa-score-history-evidence-modal.png`。
 
-恢复方式：`pdp-lab-v3.7` 标签仍指向本轮修改前的完整验收版本；可从该标签创建恢复分支。3.8 在浏览器验收通过前不创建正式版本标签。
+恢复方式：`pdp-lab-v3.7` 标签仍指向本轮修改前的完整验收版本；可从该标签创建恢复分支。3.8 的新增证据预览变更尚未创建正式版本标签。
 
 ## 历史版本：3.7（模块评分轮播补全版）
 

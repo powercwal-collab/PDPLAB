@@ -255,6 +255,7 @@ def _serialize_diagnosis(diagnosis):
                 "evidence_type": evidence.evidence_type,
                 "ocr_text": evidence.ocr_text,
                 "image_url": evidence.crop_image.url if evidence.crop_image else source_job.source.file.url,
+                "is_crop": bool(evidence.crop_image),
                 "model_reason": evidence.model_reason,
                 "confidence": float(evidence.confidence),
             })
@@ -419,6 +420,7 @@ def _serialize_job(job, include_result=False):
                 "evidence_type": evidence.evidence_type,
                 "ocr_text": evidence.ocr_text,
                 "image_url": evidence.crop_image.url if evidence.crop_image else job.source.file.url,
+                "is_crop": bool(evidence.crop_image),
                 "model_reason": evidence.model_reason,
                 "confidence": float(evidence.confidence),
             })
