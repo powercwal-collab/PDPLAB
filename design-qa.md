@@ -101,3 +101,44 @@
 - [x] Fixed card height and no module-panel overflow.
 
 final result: passed
+
+## 3.8 评分记录管理增量 QA
+
+- Source visual truth path: 2026-07-14 当前任务提供的评分记录浏览器批注截图，目标视口 1093 × 898。
+- Implementation screenshot path: unavailable；Codex in-app Browser 当前无法建立可控制页面连接，Chrome fallback 也不可用。
+- Viewport: 目标 1093 × 898。
+- State: 评分记录列表、选中版本、删除确认弹窗、删除后版本回退、切换版本后的项目总览与评分诊断。
+
+### Full-view comparison evidence
+
+- 源截图明确要求左侧版本列表不得高于右侧明细卡；实现将两侧统一为 653px，并将长列表改为内部滚动。
+- 用户补充要求分数与删除按钮上下居右；实现改为独立右侧信息列，分数在右上、删除图标在右下。
+- 用户补充要求切换版本后工作台内容联动；实现将选中记录写入 `latestDiagnosis`，使总览、诊断、缺口和任务使用同一版本对象。
+- 修改后的浏览器全屏截图尚不可用，不能基于代码或构建结果宣称视觉匹配通过。
+
+### Focused region comparison evidence
+
+- Source focused region: 左侧评分版本列表及右侧 11 模块明细卡。
+- Implementation focused region: blocked；缺少浏览器渲染截图。
+
+### Fidelity surfaces
+
+- Fonts and typography: 沿用既有 Inter / Noto Sans SC 字体和记录卡字号；待浏览器确认右侧数字与星级文案的光学基线。
+- Spacing and layout: 代码层面固定双侧 653px 高度、82px 记录卡、9px 卡间距；待浏览器确认无裁切或溢出。
+- Colors and tokens: 沿用现有蓝色选中态、灰色图标和红色危险操作语义色。
+- Image quality and assets: 本轮无图片资产；删除图标来自既有 Phosphor 图标库，无自制 SVG/CSS 图形。
+- Copy and content: 确认弹窗明确说明不可恢复以及总览将自动切换到剩余评分。
+- Accessibility: 版本按钮使用 `aria-pressed`；删除按钮有版本化可访问名称；弹窗使用 `alertdialog`、标题与描述关联，并支持 Escape。
+
+### Interaction and runtime checks
+
+- Django delete endpoint access control, latest-version response and last-record empty state: 18/18 automated tests passed.
+- Vite production build: passed.
+- Browser-rendered scrolling, visual alignment, cancel/delete click flow, selected-version workbench synchronization and console errors: blocked by unavailable browser control connection.
+
+### Findings
+
+- [P1] 缺少修改后浏览器证据，无法确认实际视觉对齐、内部滚动手感和弹窗交互状态。
+  Fix: 在本地预览重新连接可控制浏览器后，以 1093 × 898 捕获评分记录默认态和删除弹窗态，并执行取消、切换版本及测试库删除流程。
+
+final result: blocked

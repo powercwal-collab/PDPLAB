@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight, Check, CheckCircle, CircleNotch, ClockCounterClockwise, FileImage, ImageSquare,
-  LockKey, MagicWand, ShieldCheck, Sparkle, TrendUp, WarningCircle
+  LockKey, MagicWand, ShieldCheck, Sparkle, Trash, TrendUp, WarningCircle
 } from '@phosphor-icons/react';
 import './workflow.css';
 import { api } from './services/api.js';
@@ -120,23 +120,61 @@ export function ScoreReviewPage({ initialModules, starBands, onConfirm }) {
   </div>;
 }
 
-export function DiagnosisHistoryPage({ projectId, projectName }) {
+export function DiagnosisHistoryPage({ projectId, projectName, onDeleted, onSelected }) {
   const [records, setRecords] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
   useEffect(() => {
     if (!projectId) { setRecords([]); setLoading(false); return; }
     setLoading(true); setError('');
-    api.diagnoses(projectId).then(data => { setRecords(data.results); setSelectedId(data.results[0]?.id || null); }).catch(reason => setError(reason.message)).finally(() => setLoading(false));
+    api.diagnoses(projectId).then(data => { setRecords(data.results); setSelectedId(data.results[0]?.id || null); onSelected?.(data.results[0] || null); }).catch(reason => setError(reason.message)).finally(() => setLoading(false));
   }, [projectId]);
+  useEffect(() => {
+    if (!deleteTarget) return undefined;
+    const closeOnEscape = event => {
+      if (event.key === 'Escape' && !deletingId) setDeleteTarget(null);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [deleteTarget, deletingId]);
   const selected = records.find(record => record.id === selectedId) || records[0];
+  const requestDelete = record => {
+    setDeleteError('');
+    setDeleteTarget(record);
+  };
+  const selectRecord = record => {
+    setSelectedId(record.id);
+    onSelected?.(record);
+  };
+  const confirmDelete = async () => {
+    if (!deleteTarget || deletingId) return;
+    setDeletingId(deleteTarget.id);
+    setDeleteError('');
+    try {
+      const result = await api.deleteDiagnosis(deleteTarget.id);
+      const remaining = records.filter(record => record.id !== deleteTarget.id);
+      const nextSelected = selected?.id === deleteTarget.id ? (remaining[0] || null) : selected;
+      setRecords(remaining);
+      setSelectedId(nextSelected?.id || null);
+      setDeleteTarget(null);
+      onDeleted?.(result, nextSelected);
+    } catch (reason) {
+      setDeleteError(reason.message || '评分记录删除失败');
+    } finally {
+      setDeletingId(null);
+    }
+  };
   return <section className="diagnosis-history-page">
     <header><div><small>评价审计记录</small><h2>评分版本</h2><p>{projectName} 的每次锁定评分都会保留模块明细、操作者与时间。</p></div><ClockCounterClockwise size={30}/></header>
     {loading && <div className="history-empty"><CircleNotch className="spin"/>正在读取评分记录…</div>}
     {!loading && error && <div className="history-empty error"><WarningCircle/>{error}</div>}
     {!loading && !error && !records.length && <div className="history-empty"><ClockCounterClockwise size={38}/><h3>暂无锁定评分</h3><p>完成 11 个模块检查并锁定后，评分版本会显示在这里。</p></div>}
-    {!loading && selected && <div className="history-layout"><aside>{records.map(record => <button className={record.id === selected.id ? 'active' : ''} key={record.id} onClick={() => setSelectedId(record.id)}><span><b>评分版本 v{record.version}</b><small>{new Date(record.created_at).toLocaleString('zh-CN')}</small></span><strong>{record.total_score}<small>/100</small></strong><em>{record.overall_rating} 星 · {formatConfirmationMode(record.confirmation_mode)}</em></button>)}</aside><div className="history-detail"><div className="history-summary"><span><small>锁定总分</small><strong>{selected.total_score}</strong></span><span><small>整体星级</small><strong>{selected.overall_rating} 星</strong></span><span><small>评分方式</small><strong>{formatConfirmationMode(selected.confirmation_mode)}</strong></span><span><small>状态</small><strong>已锁定</strong></span></div><div className="history-module-head"><span>模块</span><span>成熟度</span><span>系数</span><span>得分</span></div>{selected.modules.map(module => <div className="history-module-row" key={module.name}><span>{module.name}</span><em className={module.maturity==='强'?'strong':module.maturity==='弱'?'weak':'medium'}>{module.maturity}</em><span>{module.coefficient}</span><b>{module.score} / {module.max}</b></div>)}</div></div>}
+    {!loading && selected && <div className="history-layout"><aside className="history-record-list" aria-label="评分版本记录">{records.map(record => <div className={record.id === selected.id ? 'history-record active' : 'history-record'} key={record.id}><button className="history-record-select" onClick={() => selectRecord(record)} aria-pressed={record.id === selected.id}><span><b>评分版本 v{record.version}</b><small>{new Date(record.created_at).toLocaleString('zh-CN')}</small></span><em>{record.overall_rating} 星 · {formatConfirmationMode(record.confirmation_mode)}</em></button><div className="history-record-meta"><strong>{record.total_score}<small>/100</small></strong><button className="history-delete-button" aria-label={`删除评分版本 v${record.version}`} title={`删除评分版本 v${record.version}`} onClick={() => requestDelete(record)}><Trash size={15}/></button></div></div>)}</aside><div className="history-detail"><div className="history-summary"><span><small>锁定总分</small><strong>{selected.total_score}</strong></span><span><small>整体星级</small><strong>{selected.overall_rating} 星</strong></span><span><small>评分方式</small><strong>{formatConfirmationMode(selected.confirmation_mode)}</strong></span><span><small>状态</small><strong>已锁定</strong></span></div><div className="history-module-head"><span>模块</span><span>成熟度</span><span>系数</span><span>得分</span></div>{selected.modules.map(module => <div className="history-module-row" key={module.name}><span>{module.name}</span><em className={module.maturity==='强'?'strong':module.maturity==='弱'?'weak':'medium'}>{module.maturity}</em><span>{module.coefficient}</span><b>{module.score} / {module.max}</b></div>)}</div></div>}
+    {deleteTarget && <div className="delete-confirm-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !deletingId) setDeleteTarget(null); }}><section className="delete-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-history-title" aria-describedby="delete-history-description"><div className="delete-confirm-icon"><Trash weight="fill" /></div><div><small>删除评分记录</small><h2 id="delete-history-title">确认删除评分版本 v{deleteTarget.version}？</h2><p id="delete-history-description">删除后将无法恢复该版本及其锁定分值；项目总览会自动切换到剩余的最新评分。</p>{deleteError && <div className="delete-confirm-error"><WarningCircle weight="fill" />{deleteError}</div>}</div><div className="delete-confirm-actions"><button className="secondary" autoFocus disabled={Boolean(deletingId)} onClick={() => setDeleteTarget(null)}>取消</button><button className="danger" disabled={Boolean(deletingId)} onClick={confirmDelete}>{deletingId ? '正在删除…' : '确认删除'}</button></div></section></div>}
   </section>;
 }
 

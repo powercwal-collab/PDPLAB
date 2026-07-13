@@ -354,6 +354,41 @@ def diagnosis_list(request):
     return JsonResponse({"diagnosis": _serialize_diagnosis(diagnosis)}, status=201)
 
 
+@csrf_exempt
+def diagnosis_detail(request, diagnosis_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "请先登录"}, status=401)
+    if request.method != "DELETE":
+        return JsonResponse({"error": "仅支持 DELETE 请求"}, status=405)
+
+    try:
+        diagnosis = DiagnosisVersion.objects.select_related("project").get(
+            pk=diagnosis_id,
+            project__in=_accessible_projects(request),
+        )
+    except DiagnosisVersion.DoesNotExist:
+        return JsonResponse({"error": "评分记录不存在"}, status=404)
+
+    project = diagnosis.project
+    deleted_version = diagnosis.version
+    diagnosis.delete()
+    latest = DiagnosisVersion.objects.select_related(
+        "project",
+        "created_by",
+        "source",
+        "source_job",
+        "source_job__source",
+    ).prefetch_related(
+        "source_job__assessments",
+        "source_job__evidence",
+    ).filter(project=project).first()
+    return JsonResponse({
+        "deleted_id": diagnosis_id,
+        "deleted_version": deleted_version,
+        "latest_diagnosis": _serialize_diagnosis(latest) if latest else None,
+    })
+
+
 def _serialize_job(job, include_result=False):
     data = {
         "id": job.id,

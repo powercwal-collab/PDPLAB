@@ -13,6 +13,7 @@ urlpatterns = [
     path("preferences/", views.preference_view, name="preferences"),
     path("uploads/", views.upload_source, name="uploads"),
     path("diagnoses/", views.diagnosis_list, name="diagnosis-list"),
+    path("diagnoses/<int:diagnosis_id>/", views.diagnosis_detail, name="diagnosis-detail"),
     path("diagnosis-jobs/", views.diagnosis_job_list, name="diagnosis-job-list"),
     path("diagnosis-jobs/<int:job_id>/", views.diagnosis_job_detail, name="diagnosis-job-detail"),
 ]

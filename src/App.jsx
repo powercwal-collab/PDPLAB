@@ -296,7 +296,7 @@ export function App() {
           {active === '全部项目' && <AllProjectsPage projects={projects} onBack={() => setActive('首页')} onOpenProject={(name) => { setCurrentProject(name); setActive('项目总览'); }} onCreate={() => setActive('导入 PDP')} />}
           {active === '项目总览' && <Dashboard diagnosis={latestDiagnosis} ruleModules={activeRuleModules} starBands={activeStarBands} gapItems={projectGapItems} taskItems={projectTasks} onRoute={() => setActive('优化路线')} />}
           {active === '评分诊断' && <Diagnosis diagnosis={latestDiagnosis} ruleModules={activeRuleModules} onReview={() => setActive('评分确认')} />}
-          {active === '评分记录' && <DiagnosisHistoryPage projectId={currentProjectData?.id} projectName={currentProject} />}
+          {active === '评分记录' && <DiagnosisHistoryPage projectId={currentProjectData?.id} projectName={currentProject} onSelected={setLatestDiagnosis} onDeleted={(result, nextSelected) => { setLatestDiagnosis(nextSelected || null); api.projects().then(data => setProjects(data.results)).catch(() => {}); triggerToast(`评分版本 v${result.deleted_version} 已删除`); }} />}
           {active === '优化路线' && (
             <TaskRoute query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} visibleTasks={visibleTasks} tasks={projectTasks} currentScore={latestDiagnosis?.total_score ?? projectModules.reduce((sum,module) => sum + Number(module.score || 0), 0)} starBands={activeStarBands} expanded={expanded} setExpanded={setExpanded} />
           )}

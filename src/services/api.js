@@ -30,4 +30,5 @@ export const api = {
   diagnosisJob: (jobId) => request(`/api/diagnosis-jobs/${jobId}/`),
   diagnoses: (projectId) => request(`/api/diagnoses/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`),
   saveDiagnosis: (payload) => request('/api/diagnoses/', json('POST', payload)),
+  deleteDiagnosis: (diagnosisId) => request(`/api/diagnoses/${diagnosisId}/`, { method: 'DELETE' }),
 };

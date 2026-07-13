@@ -215,6 +215,43 @@ class DiagnosisApiTests(TestCase):
         incomplete = self.client.post(reverse("diagnosis-list"), data=json.dumps(payload), content_type="application/json")
         self.assertEqual(incomplete.status_code, 400)
 
+    def test_diagnosis_record_can_be_deleted_and_latest_version_is_returned(self):
+        user = get_user_model().objects.create_user("history-owner", password="12345678")
+        other_user = get_user_model().objects.create_user("history-other", password="12345678")
+        project = Project.objects.create(name="评分删除验证", owner=user)
+        first = DiagnosisVersion.objects.create(
+            project=project,
+            version=1,
+            total_score=65,
+            overall_rating=5,
+            modules=[],
+            created_by=user,
+        )
+        second = DiagnosisVersion.objects.create(
+            project=project,
+            version=2,
+            total_score=80,
+            overall_rating=6,
+            modules=[],
+            created_by=user,
+        )
+
+        self.client.force_login(other_user)
+        denied = self.client.delete(reverse("diagnosis-detail", args=[second.id]))
+        self.assertEqual(denied.status_code, 404)
+
+        self.client.force_login(user)
+        deleted_latest = self.client.delete(reverse("diagnosis-detail", args=[second.id]))
+        self.assertEqual(deleted_latest.status_code, 200)
+        self.assertEqual(deleted_latest.json()["deleted_version"], 2)
+        self.assertEqual(deleted_latest.json()["latest_diagnosis"]["id"], first.id)
+        self.assertFalse(DiagnosisVersion.objects.filter(pk=second.id).exists())
+
+        deleted_last = self.client.delete(reverse("diagnosis-detail", args=[first.id]))
+        self.assertEqual(deleted_last.status_code, 200)
+        self.assertIsNone(deleted_last.json()["latest_diagnosis"])
+        self.assertFalse(DiagnosisVersion.objects.filter(project=project).exists())
+
     def test_skill_star_bands_are_used_instead_of_linear_formula(self):
         self.assertEqual(map_overall_rating(64.9), 4.5)
         self.assertEqual(map_overall_rating(65), 5)
