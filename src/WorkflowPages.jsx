@@ -1,72 +1,143 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowRight, Check, CheckCircle, CircleNotch, FileImage, ImageSquare,
+  ArrowRight, Check, CheckCircle, CircleNotch, ClockCounterClockwise, FileImage, ImageSquare,
   LockKey, MagicWand, ShieldCheck, Sparkle, TrendUp, WarningCircle
 } from '@phosphor-icons/react';
 import './workflow.css';
+import { api } from './services/api.js';
 
 const reviewModules = [
-  ['产品KV/封面故事', 10, 0.5, 5, '中'],
-  ['沉浸式购物/场景化', 18, 0.5, 9, '中'],
-  ['卖点与功能证明', 14, 0.5, 7, '中'],
-  ['产品互动/动态内容', 8, 0, 0, '弱'],
-  ['细节查阅', 12, 1, 12, '强'],
-  ['尺码/适配与对比选购', 10, 0.5, 5, '中'],
-  ['基础信息', 8, 1, 8, '强'],
-  ['使用说明/服务事项', 5, 0.5, 2.5, '中'],
-  ['关联推荐/延展购买', 5, 0.5, 2.5, '中'],
-  ['品牌/产品背书', 5, 0.5, 2.5, '中'],
-  ['页面结构与节奏', 5, 1, 5, '强'],
+  { name:'产品KV/封面故事', max:10, coefficient:.5, score:5, maturity:'中' },
+  { name:'沉浸式购物/场景化', max:18, coefficient:.5, score:9, maturity:'中' },
+  { name:'卖点与功能证明', max:14, coefficient:.5, score:7, maturity:'中' },
+  { name:'产品互动/动态内容', max:8, coefficient:0, score:0, maturity:'弱' },
+  { name:'细节查阅', max:12, coefficient:1, score:12, maturity:'强' },
+  { name:'尺码/适配与对比选购', max:10, coefficient:.5, score:5, maturity:'中' },
+  { name:'基础信息', max:8, coefficient:1, score:8, maturity:'强' },
+  { name:'使用说明/服务事项', max:5, coefficient:.5, score:2.5, maturity:'中' },
+  { name:'关联推荐/延展购买', max:5, coefficient:.5, score:2.5, maturity:'中' },
+  { name:'品牌/产品背书', max:5, coefficient:.5, score:2.5, maturity:'中' },
+  { name:'页面结构与节奏', max:5, coefficient:1, score:5, maturity:'强' },
 ];
 
-export function AnalysisPage({ onReview, onBack }) {
-  const [step, setStep] = useState(0);
+function mapOverallRating(totalScore, configuredBands) {
+  if (configuredBands?.length) {
+    return configuredBands.find(band => totalScore < Number(band.lt))?.rating || 7;
+  }
+  const bands = [[10,1],[20,1.5],[27.5,2],[35,2.5],[42.5,3],[50,3.5],[57.5,4],[65,4.5],[72.5,5],[80,5.5],[85,6],[90,6.5],[101,7]];
+  return bands.find(([limit]) => totalScore < limit)?.[1] || 7;
+}
+
+function formatConfirmationMode(mode) {
+  if (mode === 'ai_auto') return 'AI 自动评分';
+  if (mode === 'codex_verified') return 'Codex Skill 校验';
+  return '人工修订';
+}
+
+export function AnalysisPage({ job, onComplete, onBack }) {
+  const [currentJob, setCurrentJob] = useState(job);
+  const [pollError, setPollError] = useState('');
+  const [failureOpen, setFailureOpen] = useState(false);
   const stages = [
-    ['文件解析', '读取页面尺寸、格式和版本信息'],
-    ['页面切片与 OCR', '识别 12 个页面区块与主要文字'],
-    ['11 模块映射', '匹配内容、视觉证据和消费者问题'],
-    ['评分与优化推演', '生成初评、优先级和预计提升区间'],
+    ['parsing', '文件解析', '读取页面尺寸、格式和版本信息'],
+    ['slicing_ocr', '页面切片与 OCR', '识别页面区块与主要文字'],
+    ['module_mapping', '11 模块映射', '匹配内容、视觉证据和消费者问题'],
+    ['scoring', '评分与优化推演', '生成初评并自动锁定评分版本'],
   ];
   useEffect(() => {
-    if (step >= stages.length) return;
-    const timer = window.setTimeout(() => setStep(s => s + 1), 650);
+    setCurrentJob(job);
+  }, [job]);
+  useEffect(() => {
+    if (!currentJob?.id || ['completed','failed'].includes(currentJob.status)) return;
+    const timer = window.setTimeout(async () => {
+      try { const data = await api.diagnosisJob(currentJob.id); setCurrentJob(data.job); setPollError(''); }
+      catch (reason) { setPollError(reason.message); }
+    }, 650);
     return () => window.clearTimeout(timer);
-  }, [step, stages.length]);
-  const progress = Math.min(100, step / stages.length * 100);
+  }, [currentJob]);
+  useEffect(() => {
+    if (currentJob?.status === 'failed') setFailureOpen(true);
+  }, [currentJob?.status, currentJob?.error_message]);
+  const stageIndex = stages.findIndex(([code]) => code === currentJob?.stage);
+  const progress = currentJob?.progress || 0;
+  const completed = currentJob?.status === 'completed';
+  const failed = currentJob?.status === 'failed';
   return <section className="diagnosis-progress-screen">
     <header className="progress-header"><div className="progress-brand"><span>PDP</span><b>Lab</b></div><button onClick={onBack}>返回首页</button></header>
     <div className="workflow-page analysis-page">
       <div className="analysis-heading">
-        <div><div className="workflow-kicker"><CircleNotch className={step < stages.length ? 'spin' : ''} /> AI 诊断任务 · v1</div><h2>{step < stages.length ? '正在分析这份 PDP' : '初步诊断已完成'}</h2><p className="workflow-lead">系统正在按 11 模块评分规则识别信息质量、视觉素材和购买决策证据。</p></div>
-        <div className="progress-value"><strong>{Math.round(progress)}%</strong><span>{step < stages.length ? '诊断处理中' : '等待人工确认'}</span></div>
+        <div><div className="workflow-kicker"><CircleNotch className={!completed && !failed ? 'spin' : ''} /> AI 诊断任务 · #{currentJob?.id || '—'}</div><h2>{failed ? '诊断任务未完成' : completed ? 'AI 评分已完成并锁定' : '正在分析这份 PDP'}</h2><p className="workflow-lead">系统按 11 模块评分规则识别信息质量、视觉素材和购买决策证据，完成后自动生成评分版本。</p></div>
+        <div className="progress-value"><strong>{Math.round(progress)}%</strong><span>{failed ? '执行失败' : completed ? '评分已锁定' : '诊断处理中'}</span></div>
       </div>
       <div className="analysis-progress"><span style={{width:`${progress}%`}} /></div>
-      <div className="analysis-stages">{stages.map((stage,index) => <div className={index < step ? 'done' : index === step ? 'active' : ''} key={stage[0]}><i>{index < step ? <Check /> : index + 1}</i><span><strong>{stage[0]}</strong><small>{stage[1]}</small></span><em>{index < step ? '完成' : index === step ? '处理中' : '等待'}</em></div>)}</div>
-      <div className="workflow-note"><ShieldCheck /><span><b>评分不会自动锁定</b><small>诊断完成后需要人工检查证据与模块成熟度，再生成正式评分版本。</small></span></div>
-      <div className="workflow-actions"><span className="progress-hint">离开此页不会中断诊断任务</span><button className="primary" disabled={step < stages.length} onClick={onReview}>检查 AI 初评 <ArrowRight /></button></div>
+      <div className="analysis-stages">{stages.map((stage,index) => { const done = completed || index < stageIndex; const active = !failed && !completed && index === stageIndex; return <div className={done ? 'done' : active ? 'active' : ''} key={stage[0]}><i>{done ? <Check /> : index + 1}</i><span><strong>{stage[1]}</strong><small>{stage[2]}</small></span><em>{done ? '完成' : active ? '处理中' : failed && index === Math.max(stageIndex,0) ? '失败' : '等待'}</em></div>; })}</div>
+      <div className="workflow-note"><ShieldCheck /><span><b>AI 评分自动锁定</b><small>评分版本会保留模型、规则版本与证据记录；之后仍可人工修订并创建新版本。</small></span></div>
+      {(pollError || currentJob?.error_message) && <div className="review-error"><WarningCircle weight="fill"/>{pollError || currentJob.error_message}</div>}
+      <div className="workflow-actions"><span className="progress-hint">离开此页不会中断诊断任务</span><button className="primary" disabled={!completed} onClick={() => onComplete(currentJob)}>查看 AI 评分结果 <ArrowRight /></button></div>
     </div>
+    {failureOpen && <DiagnosisFailureModal message={currentJob?.error_message || '模型或 PDP Skill 调用失败，未生成评分版本。'} onBack={onBack} onClose={() => setFailureOpen(false)} />}
   </section>;
 }
 
-export function ScoreReviewPage({ onConfirm }) {
+function DiagnosisFailureModal({ message, onBack, onClose }) {
+  return <div className="failure-modal-backdrop" role="presentation"><section className="failure-modal" role="alertdialog" aria-modal="true" aria-labelledby="diagnosis-failure-title"><div className="failure-modal-icon"><WarningCircle weight="fill" /></div><div><small>诊断任务执行失败</small><h2 id="diagnosis-failure-title">未成功生成评分</h2><p>{message}</p><span>请确认 AI 模型凭据、PDP Skill 服务和 Celery Worker 均可用。</span></div><div className="failure-modal-actions"><button className="secondary" onClick={onClose}>留在此页</button><button className="primary" onClick={onBack}>返回上传页</button></div></section></div>;
+}
+
+export function ScoreReviewPage({ initialModules, starBands, onConfirm }) {
   const [selected, setSelected] = useState(2);
-  const [checked, setChecked] = useState(new Set([0,1]));
-  const current = reviewModules[selected];
-  const toggleChecked = index => setChecked(prev => { const next=new Set(prev); next.has(index)?next.delete(index):next.add(index); return next; });
+  const [moduleStates, setModuleStates] = useState(() => (initialModules?.length === 11 ? initialModules : reviewModules).map(module => ({...module, checked:false})));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const current = moduleStates[selected];
+  const checkedCount = moduleStates.filter(module => module.checked).length;
+  const totalScore = moduleStates.reduce((sum, module) => sum + module.score, 0);
+  const overallRating = mapOverallRating(totalScore, starBands);
+  const updateCurrent = (change) => setModuleStates(previous => previous.map((module,index) => index === selected ? {...module,...change} : module));
+  const setMaturity = (maturity, coefficient) => updateCurrent({ maturity, coefficient, score: Math.round(current.max * coefficient * 10) / 10 });
+  const toggleModuleChecked = index => setModuleStates(previous => previous.map((module,itemIndex) => itemIndex === index ? {...module,checked:!module.checked} : module));
+  const submit = async () => {
+    if (checkedCount !== moduleStates.length) return;
+    setSaving(true); setError('');
+    try { await onConfirm({ total_score:totalScore, overall_rating:overallRating, modules:moduleStates }); }
+    catch (reason) { setError(reason.message || '评分版本保存失败'); }
+    finally { setSaving(false); }
+  };
   return <div className="review-layout">
     <section className="panel review-list">
-      <div className="workflow-panel-head"><div><small>AI 初评 · 待确认</small><h2>检查 11 个模块</h2></div><span>{checked.size}/11 已检查</span></div>
-      <div className="review-rows">{reviewModules.map((m,index)=><button className={selected===index?'selected':''} key={m[0]} onClick={()=>setSelected(index)}><i className={checked.has(index)?'checked':''} onClick={e=>{e.stopPropagation();toggleChecked(index)}}>{checked.has(index)&&<Check />}</i><span>{m[0]}</span><em className={m[4]==='强'?'strong':m[4]==='弱'?'weak':'medium'}>{m[4]}</em><b>{m[3]}/{m[1]}</b></button>)}</div>
+      <div className="workflow-panel-head"><div><small>AI 初评 · 待确认</small><h2>检查 11 个模块</h2></div><span>{checkedCount}/11 已检查</span></div>
+      <div className="review-batch"><span>总分 {totalScore} · {overallRating} 星</span><button onClick={() => setModuleStates(previous => previous.map(module => ({...module,checked:true})))}>确认全部 AI 初评</button></div>
+      <div className="review-rows">{moduleStates.map((module,index)=><button className={selected===index?'selected':''} key={module.name} onClick={()=>setSelected(index)}><i className={module.checked?'checked':''} onClick={event=>{event.stopPropagation();toggleModuleChecked(index)}}>{module.checked&&<Check />}</i><span>{module.name}</span><em className={module.maturity==='强'?'strong':module.maturity==='弱'?'weak':'medium'}>{module.maturity}</em><b>{module.score}/{module.max}</b></button>)}</div>
     </section>
     <section className="panel review-evidence">
-      <div className="review-evidence-head"><span>证据核对</span><h2>{current[0]}</h2><div><strong>{current[3]}</strong><small>/ {current[1]} 分</small><em className={current[4]==='强'?'strong':current[4]==='弱'?'weak':'medium'}>{current[4]}</em></div></div>
-      <div className="evidence-preview"><img src="/projects/nike-kids-learning-shoe.png" alt="当前 PDP 页面证据"/><span>识别区域 03 · 卖点表达</span></div>
-      <div className="review-judgment"><small>AI 判断</small><h3>有对应内容，但证明方式不足</h3><p>产品功能有表达，但缺少结构示意、测试数据或场景验证，因此信息与视觉任一维度未达到“强”。</p></div>
-      <div className="coefficient-picker"><span>确认成熟度</span>{[['弱',0],['中',.5],['强',1]].map(x=><button className={current[2]===x[1]?'active':''} key={x[0]}>{x[0]} · {x[1]}</button>)}</div>
-      <button className="mark-checked" onClick={()=>toggleChecked(selected)}>{checked.has(selected)?<CheckCircle weight="fill"/>:<CheckCircle/>}{checked.has(selected)?'已检查此模块':'确认此模块证据'}</button>
-      <div className="workflow-actions review-confirm"><div><LockKey/><span>确认后生成评分版本 v1，可在审计记录中追溯。</span></div><button className="primary" onClick={onConfirm}>确认并锁定评分 <ArrowRight /></button></div>
+      <div className="review-evidence-head"><span>证据核对</span><h2>{current.name}</h2><div><strong>{current.score}</strong><small>/ {current.max} 分</small><em className={current.maturity==='强'?'strong':current.maturity==='弱'?'weak':'medium'}>{current.maturity}</em></div></div>
+      <div className="evidence-preview"><img src={current.evidence?.[0]?.image_url || '/projects/nike-kids-learning-shoe.png'} alt="当前 PDP 页面证据"/><span>{current.evidence?.[0] ? `识别区域 · 第 ${current.evidence[0].page_index + 1} 段` : '识别区域 03 · 卖点表达'}</span></div>
+      <div className="review-judgment"><small>AI 判断</small><h3>{current.judgment || '有对应内容，但证明方式不足'}</h3><p>{current.evidence?.[0]?.ocr_text || '产品功能有表达，但缺少结构示意、测试数据或场景验证，因此信息与视觉任一维度未达到“强”。'}</p></div>
+      <div className="coefficient-picker"><span>确认成熟度</span>{[['弱',0],['中',.5],['强',1]].map(([maturity,coefficient])=><button className={current.coefficient===coefficient?'active':''} key={maturity} onClick={() => setMaturity(maturity,coefficient)}>{maturity} · {coefficient}</button>)}</div>
+      <button className="mark-checked" onClick={()=>toggleModuleChecked(selected)}>{current.checked?<CheckCircle weight="fill"/>:<CheckCircle/>}{current.checked?'已检查此模块':'确认此模块证据'}</button>
+      {error && <div className="review-error"><WarningCircle weight="fill"/>{error}</div>}
+      <div className="workflow-actions review-confirm"><div><LockKey/><span>{checkedCount === 11 ? `将锁定 ${totalScore} 分、${overallRating} 星的评分版本。` : `还需检查 ${11 - checkedCount} 个模块，全部确认后才能锁定。`}</span></div><button className="primary" disabled={checkedCount !== 11 || saving} onClick={submit}>{saving ? '正在保存…' : '确认并锁定评分'} <ArrowRight /></button></div>
     </section>
   </div>;
+}
+
+export function DiagnosisHistoryPage({ projectId, projectName }) {
+  const [records, setRecords] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!projectId) { setRecords([]); setLoading(false); return; }
+    setLoading(true); setError('');
+    api.diagnoses(projectId).then(data => { setRecords(data.results); setSelectedId(data.results[0]?.id || null); }).catch(reason => setError(reason.message)).finally(() => setLoading(false));
+  }, [projectId]);
+  const selected = records.find(record => record.id === selectedId) || records[0];
+  return <section className="diagnosis-history-page">
+    <header><div><small>评价审计记录</small><h2>评分版本</h2><p>{projectName} 的每次锁定评分都会保留模块明细、操作者与时间。</p></div><ClockCounterClockwise size={30}/></header>
+    {loading && <div className="history-empty"><CircleNotch className="spin"/>正在读取评分记录…</div>}
+    {!loading && error && <div className="history-empty error"><WarningCircle/>{error}</div>}
+    {!loading && !error && !records.length && <div className="history-empty"><ClockCounterClockwise size={38}/><h3>暂无锁定评分</h3><p>完成 11 个模块检查并锁定后，评分版本会显示在这里。</p></div>}
+    {!loading && selected && <div className="history-layout"><aside>{records.map(record => <button className={record.id === selected.id ? 'active' : ''} key={record.id} onClick={() => setSelectedId(record.id)}><span><b>评分版本 v{record.version}</b><small>{new Date(record.created_at).toLocaleString('zh-CN')}</small></span><strong>{record.total_score}<small>/100</small></strong><em>{record.overall_rating} 星 · {formatConfirmationMode(record.confirmation_mode)}</em></button>)}</aside><div className="history-detail"><div className="history-summary"><span><small>锁定总分</small><strong>{selected.total_score}</strong></span><span><small>整体星级</small><strong>{selected.overall_rating} 星</strong></span><span><small>评分方式</small><strong>{formatConfirmationMode(selected.confirmation_mode)}</strong></span><span><small>状态</small><strong>已锁定</strong></span></div><div className="history-module-head"><span>模块</span><span>成熟度</span><span>系数</span><span>得分</span></div>{selected.modules.map(module => <div className="history-module-row" key={module.name}><span>{module.name}</span><em className={module.maturity==='强'?'strong':module.maturity==='弱'?'weak':'medium'}>{module.maturity}</em><span>{module.coefficient}</span><b>{module.score} / {module.max}</b></div>)}</div></div>}
+  </section>;
 }
 
 const matchedAssets = [

@@ -3,3 +3,15 @@ node_modules/
 dist/
 *.tar.gz
 .DS_Store
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+backend/db.sqlite3
+backend/media/
+backend/celery-broker.sqlite3
+.npm-cache/
+.playwright-cli/
+audit-current/
+*.log

@@ -1,0 +1,6 @@
+Django==5.2.16
+django-simpleui==2026.1.13
+celery>=5.5,<6
+SQLAlchemy>=2.0,<3.0
+openai>=1.109,<3.0
+cryptography>=45,<47

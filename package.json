@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": ".venv/bin/python backend/manage.py runserver 127.0.0.1:8000",
+    "dev:worker": ".venv/bin/celery --workdir backend -A pdp_lab_backend worker --loglevel=info --pool=solo",
+    "check:api": ".venv/bin/python backend/manage.py check && .venv/bin/python backend/manage.py test diagnosis",
     "build": "vite build && mkdir -p dist/server && cp server/index.js dist/server/index.js",
     "preview": "vite preview"
   },
