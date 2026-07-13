@@ -15,6 +15,8 @@ When implementing from a selected generated mock, treat that image as the source
 - Keep the first screen conclusion-led and focused on score, gaps, module maturity, and the P0 route.
 - Overall diagnosis card must keep a spacious left/right composition: numeric score on the left; overall stars, page type, explanation, and T1 target on the right.
 - The pre-upload starting state should contain only project selection and PDP content upload as its core tasks.
+- The two pre-upload task cards must share one centered 330px content axis: step label, title, and primary control use matching left/right edges and vertical baselines. Project selection and file drop controls use the same 64px height and matching 12px bold primary text.
+- The upload project picker and the workbench project switcher must reuse the same menu panel logic and visual states: complete backend project list, selected checkmark, fixed create-project action, internal scrolling, outside-click dismissal, and Escape dismissal.
 - The default product entry is a spacious home screen inspired by the supplied Lovart layout: one prominent PDP upload action plus recent project cards. Only after choosing a project or completing an import should the user enter 项目总览.
 - Home is structurally independent from the project workbench and must not show the workbench sidebar. Once inside a project, the top bar must provide an explicit 返回首页 action.
 - The project workbench top bar must also provide a fast project switcher so users can jump among recent projects without returning home.

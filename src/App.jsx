@@ -276,14 +276,7 @@ export function App() {
               <div className="project-switcher" ref={projectSwitcherRef}>
                 <button className="switch-project" aria-haspopup="menu" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen(!projectMenuOpen)}><FolderOpen size={18} /><span>切换项目</span><CaretDown size={13} /></button>
                 {projectMenuOpen && <div className="project-menu" role="menu" aria-label="切换项目">
-                  <div className="project-menu-list">
-                    {projects.length ? projects.map(project => {
-                      const name = project.name;
-                      const selected = name === currentProject;
-                      return <button role="menuitem" className={selected ? 'selected' : ''} key={project.id || name} title={name} onClick={() => { setCurrentProject(name); setActive('项目总览'); setProjectMenuOpen(false); triggerToast(`已切换至 ${name}`); }}><span>{name}</span>{selected && <CheckCircle weight="fill" />}</button>;
-                    }) : <div className="project-menu-empty">暂无可切换项目</div>}
-                  </div>
-                  <button className="menu-new" onClick={() => { setActive('导入 PDP'); setProjectMenuOpen(false); }}><Plus /> 新建诊断项目</button>
+                  <ProjectMenuPanel projects={projects} selectedName={currentProject} onSelect={(project) => { setCurrentProject(project.name); setActive('项目总览'); setProjectMenuOpen(false); triggerToast(`已切换至 ${project.name}`); }} onCreate={() => { setActive('导入 PDP'); setProjectMenuOpen(false); }} />
                 </div>}
               </div>
               <button className="secondary" onClick={() => setActive('导入 PDP')}><UploadSimple size={18} /> 导入新版本</button>
@@ -573,11 +566,29 @@ function AllProjectsPage({ projects, onBack, onOpenProject, onCreate }) {
 
 function UploadPage({ projects, diagnosisConfig, onProjectCreated, onCancel, onFinish }) {
   const [projectId, setProjectId] = useState('');
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [newProject, setNewProject] = useState({ name: '', brand: '', category: '' });
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [failure, setFailure] = useState(null);
+  const projectPickerRef = useRef(null);
+  const selectedProject = projects.find(project => String(project.id) === String(projectId));
+  useEffect(() => {
+    if (!projectPickerOpen) return undefined;
+    const closeOnOutside = event => {
+      if (projectPickerRef.current && !projectPickerRef.current.contains(event.target)) setProjectPickerOpen(false);
+    };
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setProjectPickerOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [projectPickerOpen]);
   const validateFile = candidate => {
     if (!candidate) return;
     const allowed = ['image/png', 'image/jpeg', 'application/pdf'];
@@ -622,17 +633,18 @@ function UploadPage({ projects, diagnosisConfig, onProjectCreated, onCancel, onF
     <div className="upload-intro"><span>开始一次诊断</span><h2>选择项目并上传 PDP 内容</h2><p>支持长图、截图、PDF 或网页导出文件。</p></div>
     <div className="upload-steps">
       <div className="upload-step">
-        <div className="step-index">01</div>
-        <div className="step-main"><small>选择项目</small><h3>这份 PDP 属于哪个项目？</h3>
-          <label className="project-select"><select value={projectId} onChange={e=>{setProjectId(e.target.value);setError('')}}><option value="">请选择已有项目</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}<option value="__new__">创建新项目</option></select><CaretDown /></label>
+        <div className="step-main"><div className="step-label"><span className="step-index">01</span><small>选择项目</small></div><h3>这份 PDP 属于哪个项目？</h3>
+          <div className="upload-project-picker" ref={projectPickerRef}>
+            <button type="button" className="project-select" aria-haspopup="menu" aria-expanded={projectPickerOpen} onClick={() => setProjectPickerOpen(open => !open)}><span>{projectId === '__new__' ? '创建新项目' : selectedProject?.name || '请选择已有项目'}</span>{projectPickerOpen ? <CaretUp /> : <CaretDown />}</button>
+            {projectPickerOpen && <div className="project-menu upload-project-menu" role="menu" aria-label="选择项目"><ProjectMenuPanel projects={projects} selectedId={projectId} onSelect={(project) => { setProjectId(String(project.id)); setError(''); setProjectPickerOpen(false); }} onCreate={() => { setProjectId('__new__'); setError(''); setProjectPickerOpen(false); }} /></div>}
+          </div>
           {projectId === '__new__' && <div className="new-project-form"><input value={newProject.name} onChange={e=>setNewProject({...newProject,name:e.target.value})} placeholder="项目名称"/><input value={newProject.brand} onChange={e=>setNewProject({...newProject,brand:e.target.value})} placeholder="品牌"/><input value={newProject.category} onChange={e=>setNewProject({...newProject,category:e.target.value})} placeholder="品类"/><button className="secondary" disabled={!newProject.name.trim()} onClick={createProject}>创建并选择</button></div>}
         </div>
         {projectId && projectId !== '__new__' && <CheckCircle className="step-done" weight="fill" />}
       </div>
       <CaretRight className="step-arrow" />
       <div className={`upload-step ${!projectId || projectId === '__new__' ? 'disabled' : ''}`}>
-        <div className="step-index">02</div>
-        <div className="step-main"><small>上传内容</small><h3>添加待诊断的 PDP</h3>
+        <div className="step-main"><div className="step-label"><span className="step-index">02</span><small>上传内容</small></div><h3>添加待诊断的 PDP</h3>
           <input id="pdp-upload-input" type="file" hidden accept=".png,.jpg,.jpeg,.pdf" disabled={!projectId || projectId === '__new__'} onChange={event => validateFile(event.target.files?.[0])}/>
           <label htmlFor="pdp-upload-input" className={`drop-zone ${file ? 'has-file' : ''}`} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();validateFile(event.dataTransfer.files?.[0])}}>
             {file ? <><CheckCircle size={28} weight="fill"/><span><b>{file.name}</b><small>{(file.size/1024/1024).toFixed(2)}MB · 点击重新选择</small></span></> : <><FileImage size={30}/><span><b>点击选择或拖入文件</b><small>PNG、JPG、PDF，最大 30MB</small></span></>}
@@ -644,6 +656,20 @@ function UploadPage({ projects, diagnosisConfig, onProjectCreated, onCancel, onF
     <div className="upload-footer"><button className="secondary" onClick={onCancel}>取消</button><button className="primary" disabled={!projectId || projectId === '__new__' || !file || uploading} onClick={submitUpload}>{uploading ? '上传中…' : '开始识别'} <ArrowRight /></button></div>
     {failure && <FailureModal title={failure.title} message={failure.message} hint={failure.hint} onClose={() => setFailure(null)} />}
   </section>;
+}
+
+function ProjectMenuPanel({ projects, selectedId, selectedName, onSelect, onCreate }) {
+  return <>
+    <div className="project-menu-list">
+      {projects.length ? projects.map(project => {
+        const selected = selectedId !== undefined && selectedId !== ''
+          ? String(project.id) === String(selectedId)
+          : project.name === selectedName;
+        return <button type="button" role="menuitem" className={selected ? 'selected' : ''} key={project.id || project.name} title={project.name} onClick={() => onSelect(project)}><span>{project.name}</span>{selected && <CheckCircle weight="fill" />}</button>;
+      }) : <div className="project-menu-empty">暂无可选择项目</div>}
+    </div>
+    <button type="button" className="menu-new" onClick={onCreate}><Plus /> 新建诊断项目</button>
+  </>;
 }
 
 function FailureModal({ title, message, hint, onClose }) {

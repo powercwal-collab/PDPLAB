@@ -102,6 +102,41 @@
 
 final result: passed
 
+## 3.9 上传卡片与统一项目菜单增量 QA
+
+- Source visual truth path: 2026-07-14 当前任务提供的上传页卡片批注截图与项目下拉菜单参考截图。
+- Implementation screenshot path: `design-qa-upload-cards-aligned.png`、`design-qa-upload-project-menu.png`。
+- State: 未选择项目默认态、项目菜单展开态、项目选中态。
+
+### Alignment evidence
+
+- 两张卡片内容宽度均为 330px，并在各自 453px 卡片中水平居中。
+- 两侧步骤标签均为 `y=292 / h=16`，主标题均为 `y=317 / h=25`，底部控件均为 `y=368 / h=64`。
+- 两侧内容组中心与卡片中心的垂直偏差均为 0px。
+- 标题、项目选择框与文件拖入框的左、右边界差均为 0px。
+- 项目选择文字与文件拖入主文案均为 `12px / 700`，颜色均为 `rgb(55, 64, 76)`。
+
+### Menu evidence
+
+- 上传页和工作台均渲染共享的 `ProjectMenuPanel`，避免两套列表视觉或交互分叉。
+- 当前数据渲染 7 个真实项目；菜单列表支持内部滚动，并沿用最多 20 行的既有容量规则。
+- 选中项目重新展开后只有 1 个 `.selected` 菜单项，并包含真实勾选图标。
+- `Escape` 关闭：passed。
+- 点击菜单外区域关闭：passed。
+- 固定“新建诊断项目”操作：passed。
+
+### Runtime checks
+
+- Vite production build: passed。
+- Django diagnosis tests: 18/18 passed。
+- Browser console errors: none。
+
+### Findings
+
+- No remaining P0/P1/P2 defects in the upload-card alignment and project-menu scope.
+
+final result: passed
+
 ## 3.8 评分记录管理增量 QA
 
 - Source visual truth path: 2026-07-14 当前任务提供的评分记录浏览器批注截图，目标视口 1093 × 898。
