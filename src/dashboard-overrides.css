@@ -74,6 +74,55 @@
   margin-bottom: 14px;
 }
 
+/* Replay restrained score and scale motion whenever a diagnosis/version changes. */
+.score-panel .score-copy-head strong {
+  animation: score-rating-in 480ms 100ms cubic-bezier(.22,.8,.22,1) both;
+}
+
+.score-panel .track-line > span {
+  transform-origin: left center;
+  animation: score-track-fill 720ms 140ms cubic-bezier(.22,.8,.22,1) both;
+}
+
+.score-panel .track-line > i {
+  left: var(--rating-position, 0%);
+  animation: score-marker-in 720ms 140ms cubic-bezier(.22,.8,.22,1) both;
+}
+
+.score-panel .track-line > i > b {
+  animation: score-marker-label-in 280ms 700ms ease-out both;
+}
+
+.score-panel .track-line > i.edge-right > b {
+  animation-name: score-marker-edge-label-in;
+}
+
+@keyframes score-rating-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes score-track-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes score-marker-in {
+  from { left: 0; opacity: 0; transform: translateX(-50%) scale(.76); }
+  82% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+  to { left: var(--rating-position, 0%); opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+@keyframes score-marker-label-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes score-marker-edge-label-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .gap-list > div {
   min-height: 58px;
 }
@@ -175,4 +224,8 @@
 @media (prefers-reduced-motion: reduce) {
   .maturity-panel .module-page { animation: none; }
   .module-pagination button { transition: none; }
+  .score-panel .score-copy-head strong,
+  .score-panel .track-line > span,
+  .score-panel .track-line > i,
+  .score-panel .track-line > i > b { animation: none; }
 }

@@ -11,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import './styles.css';
 import './dashboard-overrides.css';
 import './home-overrides.css';
+import './responsive.css';
 import { AnalysisPage, ScoreReviewPage, AssetMatchPage, DiagnosisHistoryPage, GenerationPage, FinalPage, RescorePage } from './WorkflowPages.jsx';
 import { api } from './services/api.js';
 
@@ -59,6 +60,32 @@ const taskBlueprints = {
 function formatScore(value) {
   const numeric = Number(value || 0);
   return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1).replace(/\.0$/, '');
+}
+
+function AnimatedScore({ value, duration = 760 }) {
+  const numericValue = Number(value || 0);
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      setDisplayValue(numericValue);
+      return undefined;
+    }
+
+    let frameId;
+    const startedAt = performance.now();
+    const tick = (now) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayValue(Math.round(numericValue * eased * 10) / 10);
+      if (progress < 1) frameId = requestAnimationFrame(tick);
+    };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [numericValue, duration]);
+
+  return <strong aria-label={`评分 ${formatScore(numericValue)}`}>{formatScore(displayValue)}</strong>;
 }
 
 function buildGapItems(moduleList = []) {
@@ -466,20 +493,21 @@ function Dashboard({ diagnosis, ruleModules, starBands, gapItems, taskItems, onR
     pageType: starBands?.find(band => Number(band.rating) === star)?.page_type || wholeStarFallback[index],
   }));
   const maturityCounts = dashboardModules.reduce((counts,module) => ({...counts,[module.maturity]:(counts[module.maturity] || 0) + 1}), {});
+  const scoreAnimationKey = `${diagnosis?.id || diagnosis?.version_id || moduleSignature}-${dashboardScore}-${dashboardRating}-${assessmentDate}`;
   return <div className="dashboard-grid">
-    <section className="panel score-panel">
+    <section className="panel score-panel" key={scoreAnimationKey}>
       <div className="panel-head"><div><small>核心结论</small><h2>整体诊断</h2></div><span className="date-pill">评估于 {assessmentDate}</span></div>
       <div className="score-body">
-        <div className="score-number"><strong>{dashboardScore}</strong><span>/ 100</span></div>
+        <div className="score-number"><AnimatedScore value={dashboardScore}/><span>/ 100</span></div>
         <div className="score-copy">
           <div className="score-copy-head"><div><small>整体星级</small><strong>{dashboardRating} 星</strong></div><span>{currentBand?.page_type || '完整说明增强页'}</span></div>
           <p>{currentBand?.business_meaning || '页面信息基本完整，但场景、证明与尺码决策仍存在明显阻力。'}</p>
         </div>
       </div>
       <div className="star-track" aria-label={`当前整体星级 ${dashboardRating} 星`}>
-        <div className="track-line">
+        <div className="track-line" style={{'--rating-position': `${ratingPosition}%`}}>
           <span style={{width:`${ratingPosition}%`}}></span>
-          <i className={Number(dashboardRating) >= 7 ? 'track-marker edge-right' : 'track-marker'} style={{left:`${ratingPosition}%`}}><b>当前 {dashboardRating} 星</b></i>
+          <i className={Number(dashboardRating) >= 7 ? 'track-marker edge-right' : 'track-marker'}><b>当前 {dashboardRating} 星</b></i>
         </div>
         <div className="track-labels">{wholeStarBands.map(item => <span key={item.star}><b>{item.star} 星</b><small>{item.pageType}</small></span>)}</div>
       </div>

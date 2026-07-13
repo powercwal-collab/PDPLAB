@@ -107,7 +107,7 @@ class DiagnosisApiTests(TestCase):
     def test_project_list_endpoint(self):
         user = get_user_model().objects.create_user("project-user", password="12345678")
         self.client.force_login(user)
-        project = Project.objects.create(name="Nike Kids", brand="Nike", category="童鞋")
+        project = Project.objects.create(name="Nike Kids", brand="Nike", category="童鞋", owner=user)
         source = PdpSource.objects.create(
             project=project,
             original_name="cover.png",
@@ -147,6 +147,33 @@ class DiagnosisApiTests(TestCase):
         )
         self.assertEqual(login.status_code, 200)
 
+    def test_new_user_starts_empty_and_projects_are_isolated_by_owner(self):
+        first_user = get_user_model().objects.create_user("first-owner", password="12345678")
+        second_user = get_user_model().objects.create_user("second-owner", password="12345678")
+        first_project = Project.objects.create(name="账号一项目", owner=first_user)
+        Project.objects.create(name="历史无主项目")
+
+        self.client.force_login(second_user)
+        self.assertEqual(self.client.get(reverse("project-list")).json()["results"], [])
+        forbidden_upload = self.client.post(
+            reverse("uploads"),
+            {"project_id": first_project.id, "file": SimpleUploadedFile("private.png", b"private", content_type="image/png")},
+        )
+        self.assertEqual(forbidden_upload.status_code, 404)
+
+        created = self.client.post(
+            reverse("project-list"),
+            data=json.dumps({"name": "账号二项目", "brand": "Test"}),
+            content_type="application/json",
+        )
+        self.assertEqual(created.status_code, 201)
+        second_project = Project.objects.get(pk=created.json()["project"]["id"])
+        self.assertEqual(second_project.owner, second_user)
+
+        self.client.force_login(first_user)
+        first_results = self.client.get(reverse("project-list")).json()["results"]
+        self.assertEqual([item["id"] for item in first_results], [first_project.id])
+
     def test_legacy_project_rating_is_normalized_to_current_star_bands(self):
         user = get_user_model().objects.create_user("legacy-rating-user", password="12345678")
         self.client.force_login(user)
@@ -184,7 +211,7 @@ class DiagnosisApiTests(TestCase):
         )
         self.assertEqual(preferences.status_code, 200)
         self.assertFalse(preferences.json()["task_updates"])
-        project = Project.objects.create(name="上传验证")
+        project = Project.objects.create(name="上传验证", owner=user)
         upload = self.client.post(
             reverse("uploads"),
             {"project_id": project.id, "file": SimpleUploadedFile("pdp.png", b"fake-png", content_type="image/png")},
@@ -195,7 +222,7 @@ class DiagnosisApiTests(TestCase):
     def test_complete_diagnosis_is_versioned_and_incomplete_diagnosis_is_rejected(self):
         user = get_user_model().objects.create_user("reviewer", password="12345678")
         self.client.force_login(user)
-        project = Project.objects.create(name="评分验证")
+        project = Project.objects.create(name="评分验证", owner=user)
         modules = [
             {"name": f"模块 {index + 1}", "max": 10, "coefficient": 0.5, "score": 5, "maturity": "中", "checked": True}
             for index in range(11)

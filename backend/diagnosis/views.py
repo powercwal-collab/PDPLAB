@@ -3,7 +3,7 @@ import json
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.db import transaction
-from django.db.models import Max, Q
+from django.db.models import Max
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.csrf import csrf_exempt
@@ -74,7 +74,7 @@ def diagnosis_config(request):
 
 
 def _accessible_projects(request):
-    return Project.objects.filter(Q(owner=request.user) | Q(owner__isnull=True))
+    return Project.objects.filter(owner=request.user)
 
 
 def _normalized_diagnosis_rating(diagnosis):

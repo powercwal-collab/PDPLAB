@@ -102,6 +102,44 @@
 
 final result: passed
 
+## 3.10 响应式布局与评分动效增量 QA
+
+- Source visual truth path: 2026-07-14 当前任务提供的手机评分卡截图及红框批注。
+- Implementation screenshot path: `design-qa-phone-home.png`、`design-qa-phone-dashboard.png`、`design-qa-ipad-home.png`、`design-qa-ipad-dashboard.png`。
+- Viewports: iPhone 390 × 844；iPad 820 × 1180。
+- State: 独立首页、项目总览、评分卡完成态、滚动分数中间态、星级刻度完成态。
+
+### Responsive evidence
+
+- iPhone 项目总览实测 `documentWidth = 390px`、`viewportWidth = 390px`；iPad 实测 `documentWidth = 820px`、`viewportWidth = 820px`，均无整页横向溢出。
+- iPhone 评分卡边界为 `left = 12px / right = 378px`；3 星标签为 `left = 20px / right = 74px`，7 星标签为 `left = 316px / right = 370px`，首尾文案完整位于卡片内。
+- iPhone 五个星级标签固定为 54px 宽并等分对应 3/4/5/6/7 星；iPad 保持 72px 标签宽和原有五段比例。
+- 手机原因提示条为 `left = 31px / right = 359px`，左右内边距均为 14px；警告图标、正文和卡片边界均有稳定留白。
+- iPad 评分卡、缺口卡和模块卡保持单列流；顶部工作台导航横向排列且不遮挡项目工具栏。
+
+### Motion evidence
+
+- 总分使用 `requestAnimationFrame` 从 0 滚动到后端实际分数；同一次浏览器验收在 250ms 读取到中间值 76.8，动画结束后为 89.5。
+- 星级结论使用 `score-rating-in`，刻度填充使用 `score-track-fill`，圆形标记使用 `score-marker-in`；标记最终位置继续由真实 `ratingPosition` 计算。
+- 7 星右边界标签使用独立动画，不会被居中变换推回卡片外。
+- 切换诊断版本会按诊断 ID、分数、星级与日期生成动画键并重新播放。
+- `prefers-reduced-motion: reduce` 下取消星级与刻度 CSS 动画，数值直接显示最终结果。
+
+### Runtime checks
+
+- Vite production build: passed（仅保留既有 chunk-size warning）。
+- Django diagnosis tests: 19/19 passed；包含新账号空项目、跨账号项目不可见、他人项目上传返回 404、创建项目绑定当前 owner。
+- 本地迁移 `0012_claim_legacy_projects` 后，原 4 个 ownerless 历史项目归属 `powercwal`，与其已有 3 个项目合并为同一私有项目集；其他账号不会继承这些记录。
+- Browser console errors/warnings: none。
+- iPhone and iPad whole-page horizontal overflow: none。
+
+### Findings
+
+- No remaining P0/P1/P2 defects in the responsive score-card, endpoint-label, warning-padding, and score-motion scope.
+- P3: 工作台顶部操作在 iPhone 保持横向滚动，以避免把长按钮强行压缩为不可读状态；该行为符合当前轻量工作台策略。
+
+final result: passed
+
 ## 3.9 上传卡片与统一项目菜单增量 QA
 
 - Source visual truth path: 2026-07-14 当前任务提供的上传页卡片批注截图与项目下拉菜单参考截图。
