@@ -1,5 +1,6 @@
 .app-shell.home-mode {
   grid-template-columns: 1fr;
+  position: relative;
 }
 
 .home-mode .sidebar {
@@ -60,6 +61,8 @@
   right: 0;
   top: 48px;
   bottom: auto;
+  max-height: calc(100dvh - 96px);
+  overflow-y: auto;
 }
 
 /* 1.0 homepage baseline: compact hero and project grid. */

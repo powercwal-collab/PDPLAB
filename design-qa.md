@@ -1,5 +1,32 @@
 # PDP Lab Design QA
 
+## 3.14 首页账号入口边界增量 QA
+
+- Source visual truth path: `/var/folders/7s/qqmq1xlx4jv330_r04qc6hb80000gn/T/codex-clipboard-90f348a7-4a0f-4a08-ab4c-325e2ebf6567.png`，用户以红框标出宽屏账号入口越出白色圆角应用壳的错误状态。
+- Implementation screenshot path: `design-qa-home-account-wide.png`、`design-qa-home-account-phone.png`。
+- Viewports: 2048 × 1144、820 × 1180、390 × 844。
+- State: 首页账号入口关闭态、账号菜单展开态、点击页面外部后的关闭态。
+
+### Full-view and focused comparison evidence
+
+- 宽屏应用壳边界为 `x=234..1814`，账号入口为 `x=1745..1783`，完整位于白色圆角应用壳内，右侧保留 31px 安全距离。
+- 原错误状态中的入口相对浏览器视口定位；实现改为相对 `.app-shell.home-mode` 定位，因此应用壳随视口居中或改变宽度时入口同步移动。
+- 账号菜单在宽屏为 `x=1523..1783`，保持与入口右对齐并位于应用壳内。
+- iPad 入口为 `x=764..802`、弹层为 `x=542..802`；iPhone 入口为 `x=338..376`、弹层为 `x=116..376`，均未越出视口。
+
+### Interaction and runtime checks
+
+- 2048 × 1144、820 × 1180、390 × 844 的 `document.documentElement.scrollWidth` 均未超过 `clientWidth`。
+- 账号入口在三档视口均只有一个可访问按钮；弹层展开后只有一个 `role=menu`。
+- 点击首页标题外部区域后菜单数量由 1 变为 0：passed。
+- 弹层高度增加 `100dvh` 上限与内部滚动兜底；本次 iPhone 内容高度未超过上限，无多余滚动条。
+
+### Findings
+
+- No remaining P0/P1/P2 defects in the standalone-home account-entry containment scope.
+
+final result: passed
+
 - Source visual truth path: `browser://127.0.0.1:4173/` browser annotation screenshots supplied in the current task.
 - Implementation screenshots:
   - `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/design-qa-project-menu.png`
