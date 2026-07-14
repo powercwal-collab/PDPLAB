@@ -4,6 +4,8 @@ x-backend-common: &backend-common
   build:
     context: .
     dockerfile: docker/backend.Dockerfile
+    args:
+      PIP_INDEX_URL: ${PDP_PIP_INDEX_URL:-https://pypi.org/simple}
   image: ${PDP_BACKEND_IMAGE:-pdp-lab-backend:local}
   env_file:
     - ${PDP_ENV_FILE:-.env.production}
