@@ -41,7 +41,7 @@ Nginx
 - SimpleUI 管理后台使用同源 iframe，`X-Frame-Options` 由 Nginx 统一设置为 `SAMEORIGIN`；不允许跨域嵌入。
 - 提供 HTTP 首次验收配置和 TLS 正式配置；正式上线必须启用 TLS。
 - 提供 Docker Compose、Ubuntu 初始化、部署、健康检查、回滚脚本。
-- GitHub Actions 已包含 CI 和手动 ECS 发布工作流。
+- GitHub Actions 已包含 CI 与 ECS 发布工作流；`main` 的 CI 成功后自动通过 self-hosted Runner 发布，仍保留手动重跑入口。
 
 ## 3. GitHub 仓库准备
 
@@ -142,9 +142,10 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(64))'
 ```text
 DATABASE_URL=postgresql://pdp_lab:<password>@postgres:5432/pdp_lab
 PDP_MEDIA_STORAGE=filesystem
+PDP_ENABLE_LOCAL_INFRA=1
 ```
 
-启动时增加 Profile：
+部署脚本会根据 `PDP_ENABLE_LOCAL_INFRA=1` 自动启用 Profile。手动排障时可等价执行：
 
 ```bash
 docker compose -p pdp-lab \
@@ -157,14 +158,15 @@ docker compose -p pdp-lab \
 
 ## 7. 首次发布
 
-服务器已经存在 `/srv/pdp-lab/shared/.env.production` 且 self-hosted runner 在线后，可在 GitHub Actions 手动运行 `Deploy ECS`。工作流会在 ECS 本机：
+服务器已经存在 `/srv/pdp-lab/shared/.env.production` 且 self-hosted runner 在线后，每次推送到 `main` 会先运行 `CI`；只有 CI 成功才自动触发 `Deploy ECS`。工作流仍支持从 `main` 手动重跑，并会在 ECS 本机：
 
 1. 将当前 commit 上传到 `/srv/pdp-lab/releases/<commit>`。
 2. 在 ECS 构建前后端镜像。
 3. 执行数据库迁移和 `collectstatic`。
 4. 启动 Nginx、Gunicorn、Celery、Redis。
 5. 请求 `/healthz`；失败时输出服务日志并中止。
-6. 成功后更新 `/srv/pdp-lab/current`，保留最近 5 个 release。
+6. 失败时尝试恢复上一个应用 release；数据库不可逆迁移仍必须依赖发布前快照。
+7. 成功后更新 `/srv/pdp-lab/current`，保留最近 5 个 release。
 
 也可在服务器手动执行：
 

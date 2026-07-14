@@ -11,6 +11,9 @@ fi
 
 export PDP_ENV_FILE="$ENV_FILE"
 COMPOSE=(docker compose -p pdp-lab --env-file "$ENV_FILE" -f "$ROOT_DIR/compose.production.yml")
+if grep -Eq '^PDP_ENABLE_LOCAL_INFRA=(1|true|yes)$' "$ENV_FILE"; then
+  COMPOSE+=(--profile local-infra)
+fi
 if grep -Eq '^PDP_ENABLE_TLS=(1|true|yes)$' "$ENV_FILE"; then
   COMPOSE+=(-f "$ROOT_DIR/compose.tls.yml")
 fi
