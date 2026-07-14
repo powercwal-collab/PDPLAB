@@ -1,6 +1,7 @@
 import json
 from types import SimpleNamespace
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
@@ -53,6 +54,10 @@ class DiagnosisApiTests(TestCase):
             HTTP_X_CSRFTOKEN=token,
         )
         self.assertEqual(allowed.status_code, 201)
+
+    def test_local_frontend_origin_is_trusted_in_development(self):
+        self.assertIn("http://127.0.0.1:4173", settings.CSRF_TRUSTED_ORIGINS)
+        self.assertIn("http://localhost:4173", settings.CSRF_TRUSTED_ORIGINS)
 
     def test_diagnosis_config_reports_skill_link_and_active_adapter(self):
         user = get_user_model().objects.create_user("config-user", password="12345678")
@@ -172,6 +177,32 @@ class DiagnosisApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(login.status_code, 200)
+
+        self.client.post(reverse("auth-logout"))
+        email_login = self.client.post(
+            reverse("auth-login"),
+            data='{"username":"designer@example.com","password":"12345678"}',
+            content_type="application/json",
+        )
+        self.assertEqual(email_login.status_code, 200)
+
+    def test_register_rejects_invalid_or_duplicate_email(self):
+        invalid = self.client.post(
+            reverse("auth-register"),
+            data='{"username":"invalid-email","nickname":"测试","email":"invalid.example.com","password":"12345678"}',
+            content_type="application/json",
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(invalid.json()["error"], "请输入有效的电子邮箱")
+
+        get_user_model().objects.create_user("existing", email="used@example.com", password="12345678")
+        duplicate = self.client.post(
+            reverse("auth-register"),
+            data='{"username":"duplicate-email","nickname":"测试","email":"USED@example.com","password":"12345678"}',
+            content_type="application/json",
+        )
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertEqual(duplicate.json()["error"], "该电子邮箱已被注册")
 
     def test_new_user_starts_empty_and_projects_are_isolated_by_owner(self):
         first_user = get_user_model().objects.create_user("first-owner", password="12345678")

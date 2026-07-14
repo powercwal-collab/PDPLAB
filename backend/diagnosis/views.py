@@ -5,6 +5,7 @@ from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import connection
 from django.db import transaction
 from django.db.models import Max
@@ -169,6 +170,11 @@ def login_view(request):
         return JsonResponse({"error": "仅支持 POST 请求"}, status=405)
     data = _payload(request)
     username = data.get("username", "").strip()
+    User = get_user_model()
+    if "@" in username:
+        email_user = User.objects.filter(email__iexact=username).only("username").first()
+        if email_user:
+            username = email_user.username
     client_ip = request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR", "unknown")
     rate_key = f"login-failures:{client_ip}:{username.lower()}"
     if cache.get(rate_key, 0) >= 5:
@@ -195,9 +201,15 @@ def register_view(request):
     email = data.get("email", "").strip()
     if len(password) < 8:
         return JsonResponse({"error": "密码至少需要 8 位字符"}, status=400)
+    try:
+        validate_email(email)
+    except ValidationError:
+        return JsonResponse({"error": "请输入有效的电子邮箱"}, status=400)
     User = get_user_model()
     if not username or User.objects.filter(username=username).exists():
         return JsonResponse({"error": "用户名为空或已被使用"}, status=400)
+    if User.objects.filter(email__iexact=email).exists():
+        return JsonResponse({"error": "该电子邮箱已被注册"}, status=400)
     user = User(username=username, email=email, first_name=data.get("nickname", "").strip())
     try:
         validate_password(password, user=user)

@@ -36,7 +36,10 @@ ALLOWED_HOSTS = env_list(
 if IS_PRODUCTION and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("生产环境必须配置 DJANGO_ALLOWED_HOSTS")
 
-CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = env_list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    "" if IS_PRODUCTION else "http://127.0.0.1:4173,http://localhost:4173",
+)
 FRONTEND_URL = os.environ.get("PDP_FRONTEND_URL", "http://127.0.0.1:4173/")
 
 INSTALLED_APPS = [

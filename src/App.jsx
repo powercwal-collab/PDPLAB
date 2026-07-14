@@ -394,7 +394,7 @@ function AuthPage({ onAuthenticated }) {
         <div className="auth-mobile-brand"><span>PDP</span><b>Lab</b></div>
         <small>欢迎使用 PDP Lab</small><h2>{mode === '登录' ? '登录你的工作台' : '创建一个新账号'}</h2><p>{mode === '登录' ? '继续管理项目、诊断任务和品牌资产。' : '注册后即可创建第一个 PDP 诊断项目。'}</p>
         <div className="auth-tabs"><button type="button" className={mode === '登录' ? 'active' : ''} onClick={() => { setMode('登录'); setError(''); }}>登录</button><button type="button" className={mode === '注册' ? 'active' : ''} onClick={() => { setMode('注册'); setError(''); }}>注册</button></div>
-        <label><span>账号</span><input value={form.username} onChange={update('username')} placeholder="请输入用户名" required/></label>
+        <label><span>账号</span><input value={form.username} onChange={update('username')} placeholder={mode === '登录' ? '请输入用户名或邮箱' : '请输入用户名'} required/></label>
         {mode === '注册' && <><label><span>昵称</span><input value={form.nickname} onChange={update('nickname')} placeholder="团队成员如何称呼你" required/></label><label><span>电子邮箱</span><input type="email" value={form.email} onChange={update('email')} placeholder="name@company.com" required/></label></>}
         <label><span>密码</span><input type="password" value={form.password} onChange={update('password')} placeholder="至少 8 位字符" minLength={8} required/></label>
         {error && <div className="auth-error"><WarningCircle weight="fill"/>{error}</div>}
@@ -627,7 +627,11 @@ function UploadPage({ projects, diagnosisConfig, onProjectCreated, onCancel, onF
     } catch (reason) {
       const message = reason.message || '项目创建失败';
       setError(message);
-      setFailure({ title:'项目创建失败', message });
+      setFailure({
+        title:'项目创建失败',
+        message,
+        hint:'请确认登录状态后刷新页面重试；项目创建不依赖 AI 模型或 PDP Skill。',
+      });
     }
   };
   const submitUpload = async () => {

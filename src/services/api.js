@@ -26,7 +26,14 @@ async function request(path, options = {}) {
   }
   const response = await fetch(path, { credentials: 'same-origin', ...options, headers });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `请求失败 (${response.status})`);
+  if (!response.ok) {
+    const fallback = response.status === 401
+      ? '登录状态已失效，请重新登录'
+      : response.status === 403
+        ? '安全校验失败，请刷新页面后重试'
+        : `请求失败 (${response.status})`;
+    throw new Error(data.error || fallback);
+  }
   return data;
 }
 
