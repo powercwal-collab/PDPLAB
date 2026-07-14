@@ -6,7 +6,22 @@
 
 本文件用于让后续 Agent 快速理解项目、区分 1.0 与 2.0、恢复指定版本，并继续完成设计或开发。不要在没有读取本文件和 `AGENTS.md` 的情况下大范围重构。
 
-## 当前激活版本：3.11（统一下拉弹层关闭逻辑版）
+## 当前激活版本：3.12（生产部署改造版）
+
+3.12 在 3.11 已验收交互上进行兼容式生产改造，不改变评分规则、页面信息架构或本地开发入口：
+
+- Django 通过 `PDP_ENV` 区分开发与生产；生产强制使用独立密钥、合法 Host/Origin、PostgreSQL、Redis 和安全 Cookie。
+- 写接口恢复 CSRF 保护，前端统一获取并发送 CSRF Token；新增登录失败限流、生产密码校验和数据库/缓存 readiness。
+- 新增 Gunicorn、Celery、Docker Compose、Nginx、TLS 覆盖配置、阿里云 OSS 可选存储与 Ubuntu 初始化/部署/回滚脚本。
+- 新增 GitHub CI 与需人工触发的 ECS 发布工作流；release 按 commit 保存，健康检查通过后才切换 `current`。
+- 目标 ECS 基线为 Ubuntu 22.04、2 vCPU / 8 GiB、80 GiB ESSD、5 Mbps；默认 Gunicorn 3 workers × 2 threads、Celery concurrency 2。
+- 完整部署逻辑、生产变量、RDS/OSS 选择、HTTPS、验收与回滚见 `docs/PRODUCTION_DEPLOYMENT.md`。
+
+验证状态：Django 开发检查通过、生产 `check --deploy` 通过（SimpleUI 的 X-Frame 检查由 Nginx `SAMEORIGIN` 明确接管）、21/21 后端测试通过、Vite 生产构建通过且首包已拆分、Compose/Actions YAML 与部署脚本语法通过；本地 `/api/health/ready/` 已实际返回数据库与缓存均可用。Docker 镜像构建需在已安装 Docker 的 ECS/CI 继续验证。
+
+恢复方式：Git 标签 `pdp-lab-v3.12` 指向本版本；执行 `git switch -c restore-v3.12 pdp-lab-v3.12` 可创建恢复分支。上一稳定交互版本继续由 `pdp-lab-v3.11` 保留。
+
+## 历史版本：3.11（统一下拉弹层关闭逻辑版）
 
 3.11 在 3.10 响应式与账号隔离基线上统一轻量下拉弹层的关闭行为，不改变页面结构、业务数据或评分规则：
 

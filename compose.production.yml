@@ -1,0 +1,99 @@
+name: pdp-lab
+
+x-backend-common: &backend-common
+  build:
+    context: .
+    dockerfile: docker/backend.Dockerfile
+  image: ${PDP_BACKEND_IMAGE:-pdp-lab-backend:local}
+  env_file:
+    - ${PDP_ENV_FILE:-.env.production}
+  restart: unless-stopped
+  depends_on:
+    redis:
+      condition: service_healthy
+  volumes:
+    - static_data:/app/backend/staticfiles
+    - media_data:/app/backend/media
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  web:
+    <<: *backend-common
+    command: ["web"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready/', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 10
+      start_period: 45s
+
+  worker:
+    <<: *backend-common
+    command: ["worker"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A pdp_lab_backend inspect ping -d celery@$$HOSTNAME --timeout=5 | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  postgres:
+    image: postgres:17-alpine
+    profiles: ["local-infra"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pdp_lab}
+      POSTGRES_USER: ${POSTGRES_USER:-pdp_lab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env.production 中配置 POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx.Dockerfile
+    image: ${PDP_NGINX_IMAGE:-pdp-lab-nginx:local}
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "${PDP_HTTP_PORT:-80}:80"
+    volumes:
+      - static_data:/srv/static:ro
+      - media_data:/srv/media:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_data:
+  media_data:

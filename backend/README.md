@@ -11,6 +11,10 @@ npm run dev:worker
 
 基础入口：`GET /api/health/`、`GET /api/projects/`、`/admin/`。
 
+生产环境新增 `GET /api/health/ready/`，会同时验证数据库和缓存。生产部署使用 Gunicorn、PostgreSQL、Redis、Celery、Nginx 与 Docker Compose，完整配置见 `docs/PRODUCTION_DEPLOYMENT.md`。开发环境仍默认使用 SQLite，不受生产设置影响。
+
+所有浏览器写接口启用 Django CSRF 保护；React 请求层会先从 `/api/auth/csrf/` 获取 Cookie，再发送 `X-CSRFToken`。不要重新为业务写接口添加 `csrf_exempt`。
+
 ## 异步诊断与模型 API
 
 本地默认使用 `auto` 适配器：配置兼容 OpenAI SDK 的模型 API Key 后使用真实模型；未配置时会进入 Mock 安全阻断，普通上传不会创建评分任务，也不会生成固定假分。Mock 只允许自动化测试通过 `PDP_ALLOW_MOCK_DIAGNOSIS=1` 显式启用。

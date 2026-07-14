@@ -1,8 +1,12 @@
 {
   "name": "pdp-lab-prototype",
-  "version": "0.0.0",
+  "version": "3.12.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22 <25"
+  },
   "scripts": {
     "dev": "vite",
     "dev:api": ".venv/bin/python backend/manage.py runserver 127.0.0.1:8000",

@@ -1,0 +1,45 @@
+name: Deploy ECS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64, pdp-lab-production]
+    environment: production
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage commit release
+        run: |
+          RELEASE="/srv/pdp-lab/releases/${GITHUB_SHA}"
+          mkdir -p "$RELEASE"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.env' \
+            --exclude '.env.production' \
+            --exclude '.venv' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude 'backend/media' \
+            ./ "$RELEASE/"
+
+      - name: Deploy and verify
+        run: |
+          RELEASE="/srv/pdp-lab/releases/${GITHUB_SHA}"
+          PDP_ENV_FILE=/srv/pdp-lab/shared/.env.production "$RELEASE/deploy/deploy.sh"
+          ln -sfn "$RELEASE" /srv/pdp-lab/current
+
+      - name: Retain five releases
+        if: success()
+        run: |
+          cd /srv/pdp-lab/releases
+          ls -1dt */ | tail -n +6 | xargs -r rm -rf

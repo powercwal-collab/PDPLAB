@@ -2,11 +2,15 @@ import json
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth.password_validation import validate_password
+from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.db import connection
 from django.db import transaction
 from django.db.models import Max
 from django.http import JsonResponse
 from django.shortcuts import redirect
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import (
     DiagnosisJob,
     DiagnosisVersion,
@@ -23,11 +27,30 @@ from .skill_runtime import resolve_scoring_standard
 
 
 def home(request):
-    return redirect("http://127.0.0.1:4173/")
+    return redirect(settings.FRONTEND_URL)
 
 
 def health(request):
     return JsonResponse({"status": "ok", "service": "pdp-lab-api"})
+
+
+def readiness(request):
+    checks = {"database": False, "cache": False}
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            checks["database"] = cursor.fetchone()[0] == 1
+        cache_key = "pdp-lab-readiness"
+        cache.set(cache_key, "ok", timeout=10)
+        checks["cache"] = cache.get(cache_key) == "ok"
+    except Exception:
+        return JsonResponse({"status": "unavailable", "checks": checks}, status=503)
+    return JsonResponse({"status": "ready", "checks": checks})
+
+
+@ensure_csrf_cookie
+def csrf_view(request):
+    return JsonResponse({"status": "ok"})
 
 
 def diagnosis_config(request):
@@ -117,7 +140,6 @@ def _serialize_project(project):
     }
 
 
-@csrf_exempt
 def project_list(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)
@@ -142,19 +164,28 @@ def _payload(request):
         return {}
 
 
-@csrf_exempt
 def login_view(request):
     if request.method != "POST":
         return JsonResponse({"error": "仅支持 POST 请求"}, status=405)
     data = _payload(request)
-    user = authenticate(request, username=data.get("username", ""), password=data.get("password", ""))
+    username = data.get("username", "").strip()
+    client_ip = request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR", "unknown")
+    rate_key = f"login-failures:{client_ip}:{username.lower()}"
+    if cache.get(rate_key, 0) >= 5:
+        return JsonResponse({"error": "登录失败次数过多，请 10 分钟后重试"}, status=429)
+    user = authenticate(request, username=username, password=data.get("password", ""))
     if user is None:
+        if cache.add(rate_key, 1, timeout=600) is False:
+            try:
+                cache.incr(rate_key)
+            except ValueError:
+                cache.set(rate_key, 1, timeout=600)
         return JsonResponse({"error": "账号或密码不正确"}, status=400)
+    cache.delete(rate_key)
     login(request, user)
     return JsonResponse({"user": {"username": user.username, "nickname": user.first_name, "email": user.email}})
 
 
-@csrf_exempt
 def register_view(request):
     if request.method != "POST":
         return JsonResponse({"error": "仅支持 POST 请求"}, status=405)
@@ -167,12 +198,17 @@ def register_view(request):
     User = get_user_model()
     if not username or User.objects.filter(username=username).exists():
         return JsonResponse({"error": "用户名为空或已被使用"}, status=400)
-    user = User.objects.create_user(username=username, email=email, password=password, first_name=data.get("nickname", "").strip())
+    user = User(username=username, email=email, first_name=data.get("nickname", "").strip())
+    try:
+        validate_password(password, user=user)
+    except ValidationError as error:
+        return JsonResponse({"error": "；".join(error.messages)}, status=400)
+    user.set_password(password)
+    user.save()
     login(request, user)
     return JsonResponse({"user": {"username": user.username, "nickname": user.first_name, "email": user.email}}, status=201)
 
 
-@csrf_exempt
 def logout_view(request):
     if request.method != "POST":
         return JsonResponse({"error": "仅支持 POST 请求"}, status=405)
@@ -180,13 +216,13 @@ def logout_view(request):
     return JsonResponse({"status": "ok"})
 
 
+@ensure_csrf_cookie
 def me_view(request):
     if not request.user.is_authenticated:
         return JsonResponse({"authenticated": False}, status=401)
     return JsonResponse({"authenticated": True, "user": {"username": request.user.username, "nickname": request.user.first_name, "email": request.user.email}})
 
 
-@csrf_exempt
 def profile_view(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)
@@ -201,7 +237,6 @@ def profile_view(request):
     return JsonResponse({"error": "不支持的请求方式"}, status=405)
 
 
-@csrf_exempt
 def preference_view(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)
@@ -217,7 +252,6 @@ def preference_view(request):
     return JsonResponse({"task_updates": preference.task_updates, "product_updates": preference.product_updates, "weekly_report": preference.weekly_report})
 
 
-@csrf_exempt
 def upload_source(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)
@@ -282,7 +316,6 @@ def _serialize_diagnosis(diagnosis):
     }
 
 
-@csrf_exempt
 def diagnosis_list(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)
@@ -355,7 +388,6 @@ def diagnosis_list(request):
     return JsonResponse({"diagnosis": _serialize_diagnosis(diagnosis)}, status=201)
 
 
-@csrf_exempt
 def diagnosis_detail(request, diagnosis_id):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)
@@ -440,7 +472,6 @@ def _serialize_job(job, include_result=False):
     return data
 
 
-@csrf_exempt
 def diagnosis_job_list(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)
@@ -484,7 +515,6 @@ def diagnosis_job_list(request):
     return JsonResponse({"job": _serialize_job(job)}, status=202)
 
 
-@csrf_exempt
 def diagnosis_job_detail(request, job_id):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)

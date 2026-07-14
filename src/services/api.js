@@ -1,5 +1,30 @@
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
+
+function cookie(name) {
+  return document.cookie
+    .split(';')
+    .map(value => value.trim())
+    .find(value => value.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+}
+
+async function ensureCsrfToken() {
+  let token = cookie('csrftoken');
+  if (!token) {
+    await fetch('/api/auth/csrf/', { credentials: 'same-origin' });
+    token = cookie('csrftoken');
+  }
+  return token ? decodeURIComponent(token) : '';
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(path, { credentials: 'same-origin', ...options });
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (!SAFE_METHODS.has(method)) {
+    const token = await ensureCsrfToken();
+    if (token) headers.set('X-CSRFToken', token);
+  }
+  const response = await fetch(path, { credentials: 'same-origin', ...options, headers });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `请求失败 (${response.status})`);
   return data;

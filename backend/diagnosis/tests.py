@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from .models import AiModelSettings, DiagnosisJob, DiagnosisVersion, PdpSkillSettings, PdpSource, Project, ScoringStandard
@@ -27,6 +27,32 @@ class DiagnosisApiTests(TestCase):
         response = self.client.get(reverse("health"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
+
+    def test_readiness_checks_database_and_cache(self):
+        response = self.client.get(reverse("readiness"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ready")
+        self.assertEqual(response.json()["checks"], {"database": True, "cache": True})
+
+    def test_write_endpoints_require_csrf_when_enforced(self):
+        user = get_user_model().objects.create_user("csrf-user", password="12345678")
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(user)
+        blocked = client.post(
+            reverse("project-list"),
+            data='{"name":"应被阻止"}',
+            content_type="application/json",
+        )
+        self.assertEqual(blocked.status_code, 403)
+        csrf_response = client.get(reverse("auth-csrf"))
+        token = csrf_response.cookies["csrftoken"].value
+        allowed = client.post(
+            reverse("project-list"),
+            data='{"name":"CSRF 通过"}',
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(allowed.status_code, 201)
 
     def test_diagnosis_config_reports_skill_link_and_active_adapter(self):
         user = get_user_model().objects.create_user("config-user", password="12345678")
