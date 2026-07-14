@@ -6,7 +6,22 @@
 
 本文件用于让后续 Agent 快速理解项目、区分 1.0 与 2.0、恢复指定版本，并继续完成设计或开发。不要在没有读取本文件和 `AGENTS.md` 的情况下大范围重构。
 
-## 当前激活版本：3.10（响应式布局与评分动效版）
+## 当前激活版本：3.11（统一下拉弹层关闭逻辑版）
+
+3.11 在 3.10 响应式与账号隔离基线上统一轻量下拉弹层的关闭行为，不改变页面结构、业务数据或评分规则：
+
+- 新增共享 `useDismissiblePopover`，统一处理点击框体外区域关闭与 `Escape` 关闭，避免账号菜单、项目菜单和上传项目选择各自维护不同监听器。
+- 首页右上角账号菜单、工作台侧栏账号菜单、工作台项目切换器、上传页项目选择器均接入同一关闭契约；点击另一个触发器时，已打开的同类弹层会先关闭。
+- 触发按钮补齐 `aria-haspopup="menu"`、`aria-expanded`，菜单补齐 `role="menu"` 与菜单项语义，保留既有视觉、菜单内部滚动和固定操作项。
+- 原生选择控件继续使用浏览器原生关闭规则；确认弹窗继续使用遮罩和弹窗专属关闭规则，不与轻量下拉菜单混用。
+
+主要改动文件：`src/App.jsx`、`src/styles.css`、`AGENTS.md`、`agent.md`、`design-qa.md`。
+
+验证状态：Vite 生产构建通过；Django diagnosis 19/19 测试通过；首页账号、侧栏账号、工作台项目切换和上传项目选择四类菜单均通过点击外部关闭与 Escape 关闭测试；刷新后的浏览器控制台无新增错误或警告。验收截图为 `design-qa-dropdown-account-open.png`、`design-qa-dropdown-sidebar-account-open.png`、`design-qa-dropdown-project-open.png`、`design-qa-dropdown-upload-project-open.png`。
+
+恢复方式：Git 标签 `pdp-lab-v3.11` 指向本版本；执行 `git switch -c restore-v3.11 pdp-lab-v3.11` 可创建恢复分支。上一版本继续由 `pdp-lab-v3.10` 保留。
+
+## 历史版本：3.10（响应式布局与评分动效版）
 
 3.10 在 3.9 上传交互验收版上补齐手机和平板适配，并保持桌面信息架构、评分规则和后端数据不变：
 

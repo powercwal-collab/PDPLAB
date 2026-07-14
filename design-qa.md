@@ -102,6 +102,42 @@
 
 final result: passed
 
+## 3.11 统一下拉弹层增量 QA
+
+- Source visual truth path: 2026-07-14 当前任务提供的账号菜单参考截图与“所有下拉弹窗点击外部关闭”批注。
+- Implementation screenshot path: `design-qa-dropdown-account-open.png`、`design-qa-dropdown-sidebar-account-open.png`、`design-qa-dropdown-project-open.png`、`design-qa-dropdown-upload-project-open.png`。
+- State: 首页账号菜单、工作台侧栏账号菜单、工作台项目切换器、上传页项目选择器展开态与关闭态。
+
+### Shared interaction evidence
+
+- 四类轻量弹层均使用共享 `useDismissiblePopover`；触发器和弹层位于同一 scope 内，点击 scope 外部通过 `pointerdown` 关闭。
+- 首页账号菜单：展开后菜单数量为 1；点击首页标题外部区域后菜单数量为 0，`aria-expanded=false`；Escape 同样通过。
+- 侧栏账号菜单：展开后菜单数量为 1；点击项目总览内容区后菜单数量为 0，`aria-expanded=false`。
+- 工作台项目切换：展开后菜单数量为 1；点击整体诊断卡后菜单数量为 0，`aria-expanded=false`；Escape 同样通过。
+- 上传页项目选择：展开后菜单数量为 1；点击上传卡片标题后菜单数量为 0，`aria-expanded=false`；Escape 同样通过。
+- 点击另一个触发器属于当前 scope 外部动作，因此旧弹层先关闭，不会并排保留两个同类型菜单。
+
+### Visual evidence
+
+- 首页与侧栏账号菜单继续使用同一个 `AccountMenu`，头像、账号信息、分组分隔、图标、退出入口和既有白色浮层样式一致。
+- 工作台与上传页项目菜单继续使用同一个 `ProjectMenuPanel`，真实项目列表、选中勾选、固定“新建诊断项目”和内部滚动规则保持一致。
+- 本轮未改变下拉层尺寸、圆角、阴影、字体、色彩或业务文案；只统一关闭行为和菜单语义。
+
+### Runtime checks
+
+- Vite production build: passed（仅保留既有 chunk-size warning）。
+- Django diagnosis tests: 19/19 passed。
+- Fresh browser console errors/warnings after reload: none。
+- Outside click dismissal: 4/4 passed。
+- Escape dismissal: all keyboard-enabled menu flows passed。
+
+### Findings
+
+- No remaining P0/P1/P2 defects in the lightweight dropdown/popover dismissal scope.
+- Native selects and blocking modals intentionally retain their own native/backdrop contracts and are not routed through the dropdown hook.
+
+final result: passed
+
 ## 3.10 响应式布局与评分动效增量 QA
 
 - Source visual truth path: 2026-07-14 当前任务提供的手机评分卡截图及红框批注。

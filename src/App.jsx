@@ -88,6 +88,24 @@ function AnimatedScore({ value, duration = 760 }) {
   return <strong aria-label={`评分 ${formatScore(numericValue)}`}>{formatScore(displayValue)}</strong>;
 }
 
+function useDismissiblePopover(open, setOpen, scopeRef) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutside = (event) => {
+      if (scopeRef.current && !scopeRef.current.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open, setOpen, scopeRef]);
+}
+
 function buildGapItems(moduleList = []) {
   return moduleList.map((module, index) => {
     const max = Number(module.max ?? module.weight ?? 0);
@@ -151,6 +169,7 @@ export function App() {
   const [currentProject, setCurrentProject] = useState('Nike Kids｜毛毛虫幼童学步鞋');
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const projectSwitcherRef = useRef(null);
+  const accountMenuScopeRef = useRef(null);
   const [generationAssets, setGenerationAssets] = useState(['a1','a2','a3']);
   const [expanded, setExpanded] = useState('P0-01');
   const [query, setQuery] = useState('');
@@ -184,21 +203,8 @@ export function App() {
     api.projects().then(data => setProjects(data.results)).catch(() => {});
   }, [authenticated, active]);
 
-  useEffect(() => {
-    if (!projectMenuOpen) return undefined;
-    const closeOnOutsideClick = event => {
-      if (projectSwitcherRef.current && !projectSwitcherRef.current.contains(event.target)) setProjectMenuOpen(false);
-    };
-    const closeOnEscape = event => {
-      if (event.key === 'Escape') setProjectMenuOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOnOutsideClick);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsideClick);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [projectMenuOpen]);
+  useDismissiblePopover(projectMenuOpen, setProjectMenuOpen, projectSwitcherRef);
+  useDismissiblePopover(accountMenuOpen, setAccountMenuOpen, accountMenuScopeRef);
 
   const activeRuleModules = useMemo(() => {
     const ruleModules = diagnosisConfig?.scoring_rules?.modules;
@@ -276,16 +282,18 @@ export function App() {
               </div>
             ))}
           </div>
-          <button className="user-card" onClick={() => setAccountMenuOpen(!accountMenuOpen)} aria-expanded={accountMenuOpen}>
-            <div className="avatar">PW</div>
-            <div><strong>品牌策略组</strong><small>管理员</small></div>
-            <DotsThree size={21} />
-          </button>
-          {accountMenuOpen && !isStandalone && <AccountMenu user={currentUser} onNavigate={handleAccountNavigate} />}
+          <div className="account-menu-anchor" ref={!isStandalone ? accountMenuScopeRef : undefined}>
+            <button className="user-card" aria-haspopup="menu" onClick={() => setAccountMenuOpen(open => !open)} aria-expanded={accountMenuOpen}>
+              <div className="avatar">PW</div>
+              <div><strong>品牌策略组</strong><small>管理员</small></div>
+              <DotsThree size={21} />
+            </button>
+            {accountMenuOpen && !isStandalone && <AccountMenu user={currentUser} onNavigate={handleAccountNavigate} />}
+          </div>
         </aside>
 
-        {active === '首页' && <div className="home-account-entry">
-          <button className="home-account-button" aria-label="用户管理" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(!accountMenuOpen)}>
+        {active === '首页' && <div className="home-account-entry" ref={accountMenuScopeRef}>
+          <button className="home-account-button" aria-label="用户管理" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(open => !open)}>
             <span>PW</span><i aria-hidden="true" />
           </button>
           {accountMenuOpen && <AccountMenu user={currentUser} onNavigate={handleAccountNavigate} />}
@@ -301,7 +309,7 @@ export function App() {
               {active === '账户管理' ? <button className="secondary" onClick={() => setActive('项目总览')}><X size={18}/> 关闭</button> : <>
               <button className="back-home" onClick={() => setActive('首页')}><House size={18} /> 返回首页</button>
               <div className="project-switcher" ref={projectSwitcherRef}>
-                <button className="switch-project" aria-haspopup="menu" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen(!projectMenuOpen)}><FolderOpen size={18} /><span>切换项目</span><CaretDown size={13} /></button>
+                <button className="switch-project" aria-haspopup="menu" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen(open => !open)}><FolderOpen size={18} /><span>切换项目</span><CaretDown size={13} /></button>
                 {projectMenuOpen && <div className="project-menu" role="menu" aria-label="切换项目">
                   <ProjectMenuPanel projects={projects} selectedName={currentProject} onSelect={(project) => { setCurrentProject(project.name); setActive('项目总览'); setProjectMenuOpen(false); triggerToast(`已切换至 ${project.name}`); }} onCreate={() => { setActive('导入 PDP'); setProjectMenuOpen(false); }} />
                 </div>}
@@ -345,19 +353,19 @@ export function App() {
 }
 
 function AccountMenu({ user, onNavigate }) {
-  return <div className="account-popover">
+  return <div className="account-popover" role="menu" aria-label="用户管理菜单">
     <div className="account-popover-head"><div className="avatar large">PW</div><div><strong>{user?.nickname || user?.username || 'power'}</strong><small>{user?.email || 'powercwal@qq.com'}</small></div></div>
     <div className="account-menu-group">
-      <button onClick={() => onNavigate('个人主页')}><UserCircle/><span>个人主页</span></button>
-      <button onClick={() => onNavigate('通知')}><Bell/><span>通知</span><CaretRight/></button>
-      <button onClick={() => onNavigate('管理后台')}><ShieldCheck/><span>管理后台</span><CaretRight/></button>
+      <button role="menuitem" onClick={() => onNavigate('个人主页')}><UserCircle/><span>个人主页</span></button>
+      <button role="menuitem" onClick={() => onNavigate('通知')}><Bell/><span>通知</span><CaretRight/></button>
+      <button role="menuitem" onClick={() => onNavigate('管理后台')}><ShieldCheck/><span>管理后台</span><CaretRight/></button>
     </div>
     <div className="account-menu-group auxiliary">
-      <button onClick={() => onNavigate('使用教程')}><Question/><span>使用教程</span></button>
-      <button onClick={() => onNavigate('快捷键')}><Keyboard/><span>快捷键</span></button>
-      <button onClick={() => onNavigate('简体中文')}><Translate/><span>简体中文</span><CaretRight/></button>
+      <button role="menuitem" onClick={() => onNavigate('使用教程')}><Question/><span>使用教程</span></button>
+      <button role="menuitem" onClick={() => onNavigate('快捷键')}><Keyboard/><span>快捷键</span></button>
+      <button role="menuitem" onClick={() => onNavigate('简体中文')}><Translate/><span>简体中文</span><CaretRight/></button>
     </div>
-    <button className="sign-out" onClick={() => onNavigate('退出登录')}><SignOut/><span>退出登录</span></button>
+    <button role="menuitem" className="sign-out" onClick={() => onNavigate('退出登录')}><SignOut/><span>退出登录</span></button>
   </div>;
 }
 
@@ -602,21 +610,7 @@ function UploadPage({ projects, diagnosisConfig, onProjectCreated, onCancel, onF
   const [failure, setFailure] = useState(null);
   const projectPickerRef = useRef(null);
   const selectedProject = projects.find(project => String(project.id) === String(projectId));
-  useEffect(() => {
-    if (!projectPickerOpen) return undefined;
-    const closeOnOutside = event => {
-      if (projectPickerRef.current && !projectPickerRef.current.contains(event.target)) setProjectPickerOpen(false);
-    };
-    const closeOnEscape = event => {
-      if (event.key === 'Escape') setProjectPickerOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOnOutside);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutside);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [projectPickerOpen]);
+  useDismissiblePopover(projectPickerOpen, setProjectPickerOpen, projectPickerRef);
   const validateFile = candidate => {
     if (!candidate) return;
     const allowed = ['image/png', 'image/jpeg', 'application/pdf'];
