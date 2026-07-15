@@ -1,10 +1,12 @@
 import base64
+from io import BytesIO
 import json
 from pathlib import Path
 from typing import Literal
 
 from django.conf import settings
 from openai import OpenAI
+from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
 from .base import DiagnosisModelAdapter
@@ -44,6 +46,13 @@ class PdpDiagnosisOutput(BaseModel):
 class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
     provider = "openai"
     prompt_version = "pdp-score-openai-v3-evidence-gates"
+    # Keep vision payloads comfortably below OpenAI-compatible gateways' request
+    # limits.  Long PDP images are represented as sequential slices rather than
+    # one enormous data URL, which also gives the model stable page coordinates.
+    MAX_IMAGE_WIDTH = 960
+    MAX_TOTAL_HEIGHT = 8400
+    SLICE_HEIGHT = 1400
+    JPEG_QUALITY = 82
 
     def __init__(self, client=None, runtime_config=None):
         config = runtime_config or {
@@ -110,7 +119,29 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             f"\n评分模块：{json.dumps(modules, ensure_ascii=False)}"
         )
 
-    def _input_content(self, source, context, file_id):
+    def _prepared_image_urls(self, source):
+        """Return deterministically resized, vertically ordered PDP image slices."""
+        suffix = Path(source.original_name).suffix.lower()
+        if suffix not in {".png", ".jpg", ".jpeg"}:
+            raise ValueError("当前模型仅支持 PNG、JPG 或 PDF 文件。")
+        with source.file.open("rb") as source_file:
+            image = ImageOps.exif_transpose(Image.open(source_file)).convert("RGB")
+
+        width, height = image.size
+        scale = min(1, self.MAX_IMAGE_WIDTH / max(width, 1), self.MAX_TOTAL_HEIGHT / max(height, 1))
+        target_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+        if image.size != target_size:
+            image = image.resize(target_size, Image.Resampling.LANCZOS)
+
+        urls = []
+        for top in range(0, image.height, self.SLICE_HEIGHT):
+            tile = image.crop((0, top, image.width, min(top + self.SLICE_HEIGHT, image.height)))
+            encoded = BytesIO()
+            tile.save(encoded, format="JPEG", quality=self.JPEG_QUALITY, optimize=True)
+            urls.append("data:image/jpeg;base64," + base64.b64encode(encoded.getvalue()).decode("ascii"))
+        return urls
+
+    def _input_content(self, source, context, file_id=None):
         suffix = Path(source.original_name).suffix.lower()
         content = [{
             "type": "input_text",
@@ -119,16 +150,16 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
         if suffix == ".pdf":
             content.append({"type": "input_file", "file_id": file_id})
         else:
-            content.append({"type": "input_image", "file_id": file_id, "detail": "high"})
+            image_urls = self._prepared_image_urls(source)
+            content[0]["text"] += f"。图片已按页面从上至下切为 {len(image_urls)} 个连续切片，page_index 从 0 开始对应切片序号。"
+            content.extend({"type": "input_image", "image_url": image_url, "detail": "high"} for image_url in image_urls)
         return [{"role": "user", "content": content}]
 
     def _chat_input_content(self, source, context):
         suffix = Path(source.original_name).suffix.lower()
         if suffix == ".pdf":
             raise ValueError("当前 Chat Completions 模型暂不支持 PDF 诊断，请上传 PNG 或 JPG。")
-        mime_type = "image/png" if suffix == ".png" else "image/jpeg"
-        with source.file.open("rb") as source_file:
-            encoded = base64.b64encode(source_file.read()).decode("ascii")
+        image_urls = self._prepared_image_urls(source)
         return [{
             "role": "system",
             "content": self._instructions(context["scoring_rules"]),
@@ -136,11 +167,12 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             "role": "user",
             "content": [{
                 "type": "text",
-                "text": "请诊断这份 PDP 图片。业务上下文：" + json.dumps(context.get("business_context") or {}, ensure_ascii=False),
-            }, {
+                "text": "请诊断这份 PDP 图片。业务上下文：" + json.dumps(context.get("business_context") or {}, ensure_ascii=False)
+                + f"。图片已按页面从上至下切为 {len(image_urls)} 个连续切片，page_index 从 0 开始对应切片序号。",
+            }] + [{
                 "type": "image_url",
-                "image_url": {"url": f"data:{mime_type};base64,{encoded}", "detail": "high"},
-            }],
+                "image_url": {"url": image_url, "detail": "high"},
+            } for image_url in image_urls],
         }]
 
     def _validate_output(self, parsed, scoring_rules):
@@ -188,15 +220,23 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             }
 
         suffix = Path(source.original_name).suffix.lower()
-        purpose = "user_data" if suffix == ".pdf" else "vision"
         remote_file = None
         try:
-            with source.file.open("rb") as source_file:
-                remote_file = self.client.files.create(file=source_file, purpose=purpose)
+            if suffix == ".pdf":
+                # Django's FieldFile is not an io.IOBase.  Pass the actual opened
+                # binary stream in an OpenAI SDK-supported filename/file tuple.
+                source.file.open("rb")
+                try:
+                    remote_file = self.client.files.create(
+                        file=(source.original_name, source.file.file),
+                        purpose="user_data",
+                    )
+                finally:
+                    source.file.close()
             response = self.client.responses.parse(
                 model=self.model_name,
                 instructions=self._instructions(scoring_rules),
-                input=self._input_content(source, context, remote_file.id),
+                input=self._input_content(source, context, remote_file.id if remote_file else None),
                 text_format=PdpDiagnosisOutput,
                 store=False,
             )

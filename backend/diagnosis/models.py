@@ -50,6 +50,7 @@ class PdpSource(models.Model):
     project = models.ForeignKey(Project, related_name="sources", on_delete=models.CASCADE)
     file = models.FileField("PDP 文件", upload_to="pdp_sources/%Y/%m/")
     original_name = models.CharField("原始文件名", max_length=255)
+    content_sha256 = models.CharField("文件内容指纹", max_length=64, blank=True, db_index=True)
     status = models.CharField("处理状态", max_length=32, default="uploaded")
     created_at = models.DateTimeField("上传时间", auto_now_add=True)
 

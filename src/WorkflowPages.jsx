@@ -70,12 +70,13 @@ export function AnalysisPage({ job, onComplete, onBack }) {
   const progress = currentJob?.progress || 0;
   const completed = currentJob?.status === 'completed';
   const failed = currentJob?.status === 'failed';
+  const retrying = currentJob?.stage === 'retrying' && !failed && !completed;
   return <section className="diagnosis-progress-screen">
     <header className="progress-header"><div className="progress-brand"><span>PDP</span><b>Lab</b></div><button onClick={onBack}>返回首页</button></header>
     <div className="workflow-page analysis-page">
       <div className="analysis-heading">
-        <div><div className="workflow-kicker"><CircleNotch className={!completed && !failed ? 'spin' : ''} /> AI 诊断任务 · #{currentJob?.id || '—'}</div><h2>{failed ? '诊断任务未完成' : completed ? 'AI 评分已完成并锁定' : '正在分析这份 PDP'}</h2><p className="workflow-lead">系统按 11 模块评分规则识别信息质量、视觉素材和购买决策证据，完成后自动生成评分版本。</p></div>
-        <div className="progress-value"><strong>{Math.round(progress)}%</strong><span>{failed ? '执行失败' : completed ? '评分已锁定' : '诊断处理中'}</span></div>
+        <div><div className="workflow-kicker"><CircleNotch className={!completed && !failed ? 'spin' : ''} /> AI 诊断任务 · #{currentJob?.id || '—'}</div><h2>{failed ? '诊断任务未完成' : completed ? 'AI 评分已完成并锁定' : retrying ? '模型服务短暂波动，正在自动重试' : '正在分析这份 PDP'}</h2><p className="workflow-lead">系统按 11 模块评分规则识别信息质量、视觉素材和购买决策证据，完成后自动生成评分版本。</p></div>
+        <div className="progress-value"><strong>{Math.round(progress)}%</strong><span>{failed ? '执行失败' : completed ? '评分已锁定' : retrying ? '自动重试中' : '诊断处理中'}</span></div>
       </div>
       <div className="analysis-progress"><span style={{width:`${progress}%`}} /></div>
       <div className="analysis-stages">{stages.map((stage,index) => { const done = completed || index < stageIndex; const active = !failed && !completed && index === stageIndex; return <div className={done ? 'done' : active ? 'active' : ''} key={stage[0]}><i>{done ? <Check /> : index + 1}</i><span><strong>{stage[1]}</strong><small>{stage[2]}</small></span><em>{done ? '完成' : active ? '处理中' : failed && index === Math.max(stageIndex,0) ? '失败' : '等待'}</em></div>; })}</div>

@@ -1,4 +1,5 @@
 import base64
+from io import BytesIO
 import json
 import tempfile
 from types import SimpleNamespace
@@ -8,13 +9,21 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from .models import AiModelSettings, DiagnosisJob, DiagnosisVersion, PdpSkillSettings, PdpSource, Project, ScoringStandard, UserProfile
 from .adapters.openai import EvidenceSuggestion, ModuleSuggestion, OpenAIDiagnosisAdapter, PdpDiagnosisOutput
 from .runtime_config import get_runtime_integration_config
 from .scoring import apply_evidence_guards, calculate_assessments, map_overall_rating
 from .skill_runtime import _validate_remote_rules
-from .tasks import run_diagnosis_job
+from .tasks import _public_error, run_diagnosis_job
+
+
+def valid_png_bytes(width=1, height=1):
+    image = Image.new("RGB", (width, height), color=(24, 117, 232))
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
 
 
 class DiagnosisApiTests(TestCase):
@@ -531,6 +540,38 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(len(serialized_module["evidence"]), 1)
         self.assertEqual(serialized_module["evidence"][0]["model_reason"], serialized_module["judgment"])
 
+    def test_identical_source_reuses_completed_model_analysis(self):
+        user = get_user_model().objects.create_user("stable-score", password="12345678")
+        project = Project.objects.create(name="稳定评分", owner=user)
+        standard = ScoringStandard.objects.get(version="pdp-v1")
+        first_source = PdpSource.objects.create(
+            project=project,
+            original_name="same.png",
+            file=SimpleUploadedFile("same.png", b"identical-pdp-content", content_type="image/png"),
+        )
+        first = DiagnosisJob.objects.create(project=project, source=first_source, scoring_standard=standard, created_by=user, adapter="mock")
+        run_diagnosis_job(first.id)
+        first.refresh_from_db()
+        second_source = PdpSource.objects.create(
+            project=project,
+            original_name="same-copy.png",
+            file=SimpleUploadedFile("same-copy.png", b"identical-pdp-content", content_type="image/png"),
+        )
+        second = DiagnosisJob.objects.create(project=project, source=second_source, scoring_standard=standard, created_by=user, adapter="mock")
+        run_diagnosis_job(second.id)
+        second.refresh_from_db()
+        self.assertEqual(second.status, "completed")
+        self.assertEqual(second.locked_version.total_score, first.locked_version.total_score)
+        self.assertEqual(second.model_runs.get().usage["mode"], "reused_identical_analysis")
+
+    def test_gateway_errors_are_sanitized_for_the_user(self):
+        code, message = _public_error(RuntimeError("<html><h1>502 Bad Gateway</h1>cloudflare"))
+        self.assertEqual(code, "MODEL_GATEWAY_UNAVAILABLE")
+        self.assertNotIn("<html>", message)
+        code, message = _public_error(RuntimeError("payload too large"))
+        self.assertEqual(code, "MODEL_PAYLOAD_TOO_LARGE")
+        self.assertNotIn("payload too large", message.lower())
+
     @override_settings(PDP_ALLOW_MOCK_DIAGNOSIS=False)
     def test_mock_adapter_is_blocked_from_creating_user_diagnosis_job(self):
         user = get_user_model().objects.create_user("mock-blocked", password="12345678")
@@ -596,16 +637,49 @@ class DiagnosisApiTests(TestCase):
         source = PdpSource.objects.create(
             project=project,
             original_name="openai.png",
-            file=SimpleUploadedFile("openai.png", b"fake-png", content_type="image/png"),
+            file=SimpleUploadedFile("openai.png", valid_png_bytes(), content_type="image/png"),
         )
         result = OpenAIDiagnosisAdapter(client=fake_client).analyze(source=source, context={"channel": "tmall"}, scoring_rules=rules)
         self.assertEqual(len(result["modules"]), 11)
         self.assertEqual(len(result["evidence"]), 11)
         self.assertEqual(result["request_id"], "resp_test")
         self.assertTrue(result["usage"]["external_api"])
-        self.assertEqual(fake_client.files.purpose, "vision")
-        self.assertEqual(fake_client.files.deleted, ["file_test"])
+        self.assertFalse(hasattr(fake_client.files, "purpose"))
+        self.assertEqual(fake_client.files.deleted, [])
         self.assertFalse(fake_client.responses.kwargs["store"])
+
+    def test_responses_adapter_uploads_pdf_using_binary_file_tuple(self):
+        rules = ScoringStandard.objects.get(version="pdp-v2").rules
+        parsed = PdpDiagnosisOutput(
+            modules=[ModuleSuggestion(module_code=item["code"], coefficient=0, judgment="未发现有效内容", confidence=0.8) for item in rules["modules"]],
+            evidence=[EvidenceSuggestion(module_code=item["code"], page_index=0, reason="未发现有效内容", confidence=0.8) for item in rules["modules"]],
+        )
+
+        class FakeFiles:
+            def create(self, **kwargs):
+                self.kwargs = kwargs
+                return SimpleNamespace(id="pdf_test")
+
+            def delete(self, _file_id):
+                return None
+
+        class FakeResponses:
+            def parse(self, **_kwargs):
+                return SimpleNamespace(id="pdf_response", output_parsed=parsed, usage=None)
+
+        fake_files = FakeFiles()
+        user = get_user_model().objects.create_user("pdf-adapter", password="12345678")
+        project = Project.objects.create(name="PDF 适配器", owner=user)
+        source = PdpSource.objects.create(
+            project=project,
+            original_name="page.pdf",
+            file=SimpleUploadedFile("page.pdf", b"%PDF-1.4\nminimal", content_type="application/pdf"),
+        )
+        adapter = OpenAIDiagnosisAdapter(client=SimpleNamespace(files=fake_files, responses=FakeResponses()))
+        adapter.analyze(source=source, context={}, scoring_rules=rules)
+        uploaded = fake_files.kwargs["file"]
+        self.assertEqual(uploaded[0], "page.pdf")
+        self.assertEqual(fake_files.kwargs["purpose"], "user_data")
 
     def test_chat_completions_adapter_uses_data_url_and_structured_output(self):
         rules = ScoringStandard.objects.get(version="pdp-v1").rules
@@ -643,7 +717,7 @@ class DiagnosisApiTests(TestCase):
         source = PdpSource.objects.create(
             project=project,
             original_name="chat.png",
-            file=SimpleUploadedFile("chat.png", b"fake-png", content_type="image/png"),
+            file=SimpleUploadedFile("chat.png", valid_png_bytes(), content_type="image/png"),
         )
         adapter = OpenAIDiagnosisAdapter(client=fake_client, runtime_config={
             "model_name": "mimo-v2.5",
@@ -651,7 +725,26 @@ class DiagnosisApiTests(TestCase):
         })
         result = adapter.analyze(source=source, context={"channel": "tmall"}, scoring_rules=rules)
         content = completions.kwargs["messages"][1]["content"]
-        self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/png;base64,"))
+        self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,"))
         self.assertEqual(len(result["modules"]), 11)
         self.assertEqual(len(result["evidence"]), 11)
         self.assertEqual(result["usage"]["mode"], "chat_completions")
+
+    def test_chat_adapter_slices_tall_pdp_before_sending_to_model(self):
+        user = get_user_model().objects.create_user("slice-adapter", password="12345678")
+        project = Project.objects.create(name="切片适配器", owner=user)
+        source = PdpSource.objects.create(
+            project=project,
+            original_name="tall-pdp.png",
+            file=SimpleUploadedFile("tall-pdp.png", valid_png_bytes(720, 4200), content_type="image/png"),
+        )
+        adapter = OpenAIDiagnosisAdapter(client=SimpleNamespace(), runtime_config={
+            "model_name": "mimo-v2.5",
+            "protocol": "chat_completions",
+        })
+        rules = ScoringStandard.objects.get(version="pdp-v2").rules
+        messages = adapter._chat_input_content(source, {"business_context": {}, "scoring_rules": rules})
+        content = messages[1]["content"]
+        self.assertEqual(len(content), 4)  # one instruction + three 1400px slices
+        self.assertIn("3 个连续切片", content[0]["text"])
+        self.assertTrue(all(item["image_url"]["url"].startswith("data:image/jpeg;base64,") for item in content[1:]))
