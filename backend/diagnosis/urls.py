@@ -12,6 +12,7 @@ urlpatterns = [
     path("auth/logout/", views.logout_view, name="auth-logout"),
     path("auth/me/", views.me_view, name="auth-me"),
     path("profile/", views.profile_view, name="profile"),
+    path("profile/avatar/", views.profile_avatar_view, name="profile-avatar"),
     path("preferences/", views.preference_view, name="preferences"),
     path("uploads/", views.upload_source, name="uploads"),
     path("diagnoses/", views.diagnosis_list, name="diagnosis-list"),

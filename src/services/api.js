@@ -48,6 +48,12 @@ export const api = {
   createProject: (payload) => request('/api/projects/', json('POST', payload)),
   profile: () => request('/api/profile/'),
   updateProfile: (payload) => request('/api/profile/', json('PATCH', payload)),
+  uploadAvatar: (file) => {
+    const body = new FormData();
+    body.append('avatar', file);
+    return request('/api/profile/avatar/', { method: 'POST', body });
+  },
+  deleteAvatar: () => request('/api/profile/avatar/', { method: 'DELETE' }),
   preferences: () => request('/api/preferences/'),
   updatePreferences: (payload) => request('/api/preferences/', json('PATCH', payload)),
   uploadSource: (projectId, file) => {

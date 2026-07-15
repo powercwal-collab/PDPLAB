@@ -1,5 +1,8 @@
 from django import forms
 from django.contrib import admin
+from django.contrib.admin.forms import AdminAuthenticationForm
+from django.core.exceptions import ValidationError
+from types import MethodType
 from .models import (
     AiModelSettings,
     DiagnosisJob,
@@ -12,7 +15,25 @@ from .models import (
     Project,
     PdpSkillSettings,
     ScoringStandard,
+    UserProfile,
 )
+
+
+class SuperuserAdminAuthenticationForm(AdminAuthenticationForm):
+    """Only superusers may authenticate into the operations admin."""
+
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        if not user.is_superuser:
+            raise ValidationError("仅超级管理员可登录管理后台。", code="not_superuser")
+
+
+def _superuser_only_has_permission(self, request):
+    return bool(request.user.is_active and request.user.is_superuser)
+
+
+admin.site.login_form = SuperuserAdminAuthenticationForm
+admin.site.has_permission = MethodType(_superuser_only_has_permission, admin.site)
 
 
 class AiModelSettingsAdminForm(forms.ModelForm):
@@ -87,6 +108,12 @@ class PdpSourceAdmin(admin.ModelAdmin):
 @admin.register(NotificationPreference)
 class NotificationPreferenceAdmin(admin.ModelAdmin):
     list_display = ("user", "task_updates", "product_updates", "weekly_report", "updated_at")
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "avatar", "updated_at")
+    search_fields = ("user__username", "user__email", "user__first_name")
 
 
 @admin.register(ScoringStandard)

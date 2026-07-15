@@ -65,6 +65,15 @@ class NotificationPreference(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class UserProfile(models.Model):
+    user = models.OneToOneField("auth.User", related_name="pdp_profile", on_delete=models.CASCADE)
+    avatar = models.ImageField("用户头像", upload_to="user_avatars/%Y/%m/", blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} · 个人资料"
+
+
 class DiagnosisVersion(models.Model):
     project = models.ForeignKey(Project, related_name="diagnoses", on_delete=models.CASCADE)
     version = models.PositiveIntegerField("评分版本", default=1)

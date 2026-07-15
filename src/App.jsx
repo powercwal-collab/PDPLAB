@@ -12,6 +12,7 @@ import './styles.css';
 import './dashboard-overrides.css';
 import './home-overrides.css';
 import './responsive.css';
+import './user-profile.css';
 import { AnalysisPage, ScoreReviewPage, AssetMatchPage, DiagnosisHistoryPage, GenerationPage, FinalPage, RescorePage } from './WorkflowPages.jsx';
 import { api } from './services/api.js';
 
@@ -60,6 +61,28 @@ const taskBlueprints = {
 function formatScore(value) {
   const numeric = Number(value || 0);
   return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1).replace(/\.0$/, '');
+}
+
+function userInitials(user) {
+  const source = (user?.nickname || user?.username || '用户').trim();
+  if (!source) return '用户';
+  const words = source.split(/\s+/).filter(Boolean);
+  if (words.length > 1) return words.slice(0, 2).map(word => Array.from(word)[0]).join('').toUpperCase();
+  return Array.from(source).slice(0, 2).join('').toUpperCase();
+}
+
+function userRoleLabel(user) {
+  if (user?.is_superuser) return '超级管理员';
+  if (user?.is_staff) return '管理员';
+  return '用户';
+}
+
+function UserAvatar({ user, className = '', imageUrl = '', as = 'div' }) {
+  const Element = as;
+  const avatarUrl = imageUrl || user?.avatar_url || '';
+  return <Element className={`avatar${className ? ` ${className}` : ''}${avatarUrl ? ' has-image' : ''}`}>
+    {avatarUrl ? <img src={avatarUrl} alt={`${user?.nickname || user?.username || '用户'}头像`} /> : userInitials(user)}
+  </Element>;
 }
 
 function AnimatedScore({ value, duration = 760 }) {
@@ -254,7 +277,7 @@ export function App() {
       setAccountMenuOpen(false);
       return;
     }
-    if (target === '管理后台') window.open('http://127.0.0.1:8000/admin/', '_blank');
+    if (target === '管理后台') window.open('/admin/', '_blank', 'noopener,noreferrer');
     else { setAccountTab(target); setAccountModalOpen(true); }
     setAccountMenuOpen(false);
   };
@@ -284,8 +307,8 @@ export function App() {
           </div>
           <div className="account-menu-anchor" ref={!isStandalone ? accountMenuScopeRef : undefined}>
             <button className="user-card" aria-haspopup="menu" onClick={() => setAccountMenuOpen(open => !open)} aria-expanded={accountMenuOpen}>
-              <div className="avatar">PW</div>
-              <div><strong>品牌策略组</strong><small>管理员</small></div>
+              <UserAvatar user={currentUser} />
+              <div><strong>{currentUser?.nickname || currentUser?.username || '用户'}</strong><small>{userRoleLabel(currentUser)}</small></div>
               <DotsThree size={21} />
             </button>
             {accountMenuOpen && !isStandalone && <AccountMenu user={currentUser} onNavigate={handleAccountNavigate} />}
@@ -294,7 +317,7 @@ export function App() {
 
         {active === '首页' && <div className="home-account-entry" ref={accountMenuScopeRef}>
           <button className="home-account-button" aria-label="用户管理" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(open => !open)}>
-            <span>PW</span><i aria-hidden="true" />
+            <UserAvatar user={currentUser} className="home-avatar" as="span"/><i aria-hidden="true" />
           </button>
           {accountMenuOpen && <AccountMenu user={currentUser} onNavigate={handleAccountNavigate} />}
         </div>}
@@ -337,7 +360,7 @@ export function App() {
           {active === 'AI 创作' && <GenerationPage assetIds={generationAssets} onComplete={() => setActive('最终优化页面')} />}
           {active === '最终优化页面' && <FinalPage onBackTasks={() => setActive('优化路线')} onRescore={() => setActive('复评结果')} />}
           {active === '复评结果' && <RescorePage onFinish={() => { setActive('项目总览'); triggerToast('本轮优化已完成并归档'); }} />}
-          {active === '设置' && <SettingsPage diagnosisConfig={diagnosisConfig} onSaved={(message) => triggerToast(message)} />}
+          {active === '设置' && <SettingsPage diagnosisConfig={diagnosisConfig} currentUser={currentUser} onSaved={(message) => triggerToast(message)} />}
           {active === '账户管理' && <AccountManagement currentUser={currentUser} activeTab={accountTab} setActiveTab={setAccountTab} onUserUpdated={setCurrentUser} onSaved={(message='账户信息已保存') => triggerToast(message)} />}
         </main>
       </div>
@@ -354,11 +377,11 @@ export function App() {
 
 function AccountMenu({ user, onNavigate }) {
   return <div className="account-popover" role="menu" aria-label="用户管理菜单">
-    <div className="account-popover-head"><div className="avatar large">PW</div><div><strong>{user?.nickname || user?.username || 'power'}</strong><small>{user?.email || 'powercwal@qq.com'}</small></div></div>
+    <div className="account-popover-head"><UserAvatar user={user} className="large"/><div><strong>{user?.nickname || user?.username || '用户'}</strong><small>{user?.email || '未设置邮箱'}</small></div></div>
     <div className="account-menu-group">
       <button role="menuitem" onClick={() => onNavigate('个人主页')}><UserCircle/><span>个人主页</span></button>
       <button role="menuitem" onClick={() => onNavigate('通知')}><Bell/><span>通知</span><CaretRight/></button>
-      <button role="menuitem" onClick={() => onNavigate('管理后台')}><ShieldCheck/><span>管理后台</span><CaretRight/></button>
+      {user?.is_superuser && <button role="menuitem" onClick={() => onNavigate('管理后台')}><ShieldCheck/><span>管理后台</span><CaretRight/></button>}
     </div>
     <div className="account-menu-group auxiliary">
       <button role="menuitem" onClick={() => onNavigate('使用教程')}><Question/><span>使用教程</span></button>
@@ -406,9 +429,10 @@ function AuthPage({ onAuthenticated }) {
 }
 
 function AccountManagement({ currentUser, activeTab, setActiveTab, onUserUpdated, onSaved }) {
-  const [nickname, setNickname] = useState(currentUser?.nickname || 'power');
-  const [email, setEmail] = useState(currentUser?.email || 'powercwal@qq.com');
+  const [nickname, setNickname] = useState(currentUser?.nickname || currentUser?.username || '');
+  const [email, setEmail] = useState(currentUser?.email || '');
   const [avatarPreview, setAvatarPreview] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [productUpdates, setProductUpdates] = useState(true);
   const [taskUpdates, setTaskUpdates] = useState(true);
   const [weeklyReport, setWeeklyReport] = useState(false);
@@ -417,6 +441,34 @@ function AccountManagement({ currentUser, activeTab, setActiveTab, onUserUpdated
   useEffect(() => {
     api.preferences().then(data => { setTaskUpdates(data.task_updates); setProductUpdates(data.product_updates); setWeeklyReport(data.weekly_report); }).catch(() => {});
   }, []);
+  useEffect(() => {
+    setNickname(currentUser?.nickname || currentUser?.username || '');
+    setEmail(currentUser?.email || '');
+  }, [currentUser?.username, currentUser?.nickname, currentUser?.email]);
+  useEffect(() => () => {
+    if (avatarPreview?.startsWith('blob:')) URL.revokeObjectURL(avatarPreview);
+  }, [avatarPreview]);
+  const changeAvatar = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { onSaved('头像仅支持 JPG、PNG 或 WebP'); return; }
+    if (file.size > 5 * 1024 * 1024) { onSaved('头像文件不能超过 5MB'); return; }
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarPreview(previewUrl);
+    setUploadingAvatar(true);
+    try {
+      const user = await api.uploadAvatar(file);
+      onUserUpdated?.(user);
+      setAvatarPreview('');
+      onSaved('头像已更新');
+    } catch (reason) {
+      setAvatarPreview('');
+      onSaved(reason.message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
   const saveProfile = async () => {
     setSaving(true);
     try { const user = await api.updateProfile({ nickname, email }); onUserUpdated?.(user); onSaved('账户信息已保存'); }
@@ -434,11 +486,11 @@ function AccountManagement({ currentUser, activeTab, setActiveTab, onUserUpdated
     <div className="account-content">
       {activeTab === '个人主页' && <>
         <div className="account-section-title"><div><h2>账户信息</h2><p>维护个人资料与团队身份信息。</p></div></div>
-        <div className="profile-summary"><div className={`avatar profile ${avatarPreview ? 'has-image' : ''}`}>{avatarPreview ? <img src={avatarPreview} alt="用户头像"/> : 'PW'}</div><div><strong>{nickname}</strong><span>{email}</span><small>品牌策略组 · 管理员</small></div><input id="avatar-file" type="file" accept="image/*" hidden onChange={event=>{const file=event.target.files?.[0];if(file)setAvatarPreview(URL.createObjectURL(file))}}/><label htmlFor="avatar-file" className="secondary avatar-upload">更换头像</label></div>
+        <div className="profile-summary"><UserAvatar user={currentUser} imageUrl={avatarPreview} className="profile"/><div><strong>{nickname}</strong><span>{email}</span><small>{userRoleLabel(currentUser)}</small></div><input id="avatar-file" type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={uploadingAvatar} onChange={changeAvatar}/><label htmlFor="avatar-file" className={`secondary avatar-upload${uploadingAvatar ? ' disabled' : ''}`}>{uploadingAvatar ? '上传中…' : '更换头像'}</label></div>
         <div className="account-form">
-          <label><span>用户名</span><div><input value={nickname} onChange={e => setNickname(e.target.value)}/><PencilSimple/></div></label>
+          <label><span>昵称</span><div><input value={nickname} onChange={e => setNickname(e.target.value)}/><PencilSimple/></div></label>
           <label><span>电子邮箱</span><div><input type="email" value={email} onChange={e => setEmail(e.target.value)}/><PencilSimple/></div></label>
-          <label><span>账号角色</span><div className="readonly-value">超级管理员</div></label>
+          <label><span>账号角色</span><div className="readonly-value">{userRoleLabel(currentUser)}</div></label>
         </div>
         <div className="device-section"><div><h3>设备管理</h3><p>查看当前登录设备，异常设备可在 Django 管理后台中停用账号。</p></div><div className="device-row"><DeviceMobile size={22}/><div><strong>桌面端 · macOS · 本地开发环境</strong><small>当前设备 · 最近活动：刚刚</small></div><span>在线</span></div></div>
         <div className="account-actions"><button className="primary" disabled={saving} onClick={saveProfile}>{saving?'保存中…':'保存修改'}</button></div>
@@ -454,7 +506,9 @@ function AccountManagement({ currentUser, activeTab, setActiveTab, onUserUpdated
       </>}
       {activeTab === '安全与登录' && <>
         <div className="account-section-title"><div><h2>安全与登录</h2><p>账号权限与密码由 Django 管理后台统一维护。</p></div></div>
-        <div className="security-card"><ShieldCheck size={30} weight="fill"/><div><strong>超级管理员账号</strong><p>当前账号已启用后台员工及超级管理员权限。</p></div><a href="http://127.0.0.1:8000/admin/" target="_blank" rel="noreferrer">打开管理后台 <ArrowRight/></a></div>
+        {currentUser?.is_superuser
+          ? <div className="security-card"><ShieldCheck size={30} weight="fill"/><div><strong>{userRoleLabel(currentUser)}账号</strong><p>当前账号已获授权使用运营管理后台。</p></div><a href="/admin/" target="_blank" rel="noreferrer">打开管理后台 <ArrowRight/></a></div>
+          : <div className="security-card"><ShieldCheck size={30}/><div><strong>普通用户账号</strong><p>当前账号可使用 PDP Lab 工作台，但无权登录运营管理后台。</p></div><span className="readonly-value">后台不可用</span></div>}
       </>}
       {activeTab === '使用教程' && <InfoPanel icon={Question} title="使用教程" description="按产品流程快速完成一次 PDP 诊断。" items={[['1','新建项目并上传 PDP'],['2','等待诊断并确认 11 个模块'],['3','锁定评分并查看历史版本'],['4','根据 P0/P1 路线执行优化'],['5','资产匹配与 AI 生成暂未开放']]}/>} 
       {activeTab === '快捷键' && <InfoPanel icon={Keyboard} title="快捷键" description="在工作台中更快地完成常用操作。" items={[["⌘ K","打开项目切换"],["⌘ U","导入新版本"],["⌘ /","打开快捷键"],["Esc","关闭弹窗"]]}/>} 
@@ -734,7 +788,7 @@ function TaskRoute({query,setQuery,filter,setFilter,visibleTasks,tasks,currentSc
   return <div className="route-page"><section className="panel route-hero"><div><span className="eyebrow">从诊断到执行</span><h2>{p0Tasks.length ? `优先完成 ${p0Tasks.length} 个 P0，预计进入 ${projectedBand?.rating || '下一'} 星` : '当前没有 P0 得分补强任务'}</h2><p>系统已按模块剩余得分空间、成熟度与评分规则生成优化顺序。</p></div><div className="route-score"><span>当前</span><strong>{formatScore(currentScore)}</strong><ArrowRight/><span>预计</span><strong>{formatScore(projectedScore)}</strong></div></section><section className="panel task-ledger"><div className="ledger-toolbar"><div className="search"><MagnifyingGlass/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索任务或模块"/></div><div className="filters">{['全部','P0','P1','P2'].map(f=><button className={filter===f?'active':''} onClick={()=>setFilter(f)} key={f}>{f}</button>)}</div></div><div className="task-head"><span>优先级 / 任务</span><span>对应模块</span><span>预计提升</span><span>负责人</span><span>状态</span><span></span></div>{visibleTasks.length ? visibleTasks.map(task=><div className="task-wrap" key={task.id}><button className="task-row" onClick={()=>setExpanded(expanded===task.id?'':task.id)}><span><i className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</i><b>{task.title}</b></span><span>{task.module}</span><strong>{task.lift}</strong><span>{task.owner}</span><span className="task-status">{task.status}</span>{expanded===task.id?<CaretUp/>:<CaretDown/>}</button>{expanded===task.id&&<div className="task-detail"><div><small>执行说明</small><p>{task.detail}</p></div><div><small>所需资产</small><div className="asset-tags">{task.assets.map(a=><span key={a}>{a}</span>)}</div></div><button className="primary unavailable-action" disabled>品牌资产匹配 · 暂未开放</button></div>}</div>) : <div className="task-empty">当前筛选条件下没有优化任务。</div>}</section></div>;
 }
 
-function SettingsPage({ onSaved, diagnosisConfig }) {
+function SettingsPage({ onSaved, diagnosisConfig, currentUser }) {
   const [tab, setTab] = useState('诊断规则');
   const [settings, setSettings] = useState({ target:'T1 强', autoMatch:false, requireReview:true, weeklyDigest:false });
   const tabs=['诊断规则','品牌资产','集成服务','团队权限'];
@@ -746,7 +800,7 @@ function SettingsPage({ onSaved, diagnosisConfig }) {
       {tab==='诊断规则'&&<><div className="settings-head"><div><h2>诊断规则</h2><p>前端评分展示与后端当前启用的 PDP Skill 规则保持一致。</p></div><strong className="config-status ready">已同步</strong></div><div className="rule-source-card"><div><small>规则来源</small><b>{diagnosisConfig?.source_skill || 'pdp-detail-page-methodology'}</b><span>{diagnosisConfig?.source_mode === 'remote_http' ? '远程 Skill' : '内置版本化规则'} · {diagnosisConfig?.scoring_standard_version || 'pdp-v1'}{ruleRevision ? ` · ${ruleRevision}` : ''}</span></div><em>{ruleModules.length || 11} 模块 · 100 分</em></div><div className="rule-module-list">{ruleModules.map(module=><div key={module.code}><span>{module.name}</span><b>{module.weight} 分</b><small>{module.strong_standard}</small></div>)}</div><SettingSelect label="默认目标层级" value={settings.target} onChange={value=>setSettings({...settings,target:value})} options={['T1 强','T1-minus','T0 专业决策']}/><div className="setting-row"><div><b>AI 评分确认方式</b><span>11 模块与证据通过后自动锁定，人工可另建修订版本</span></div><strong className="config-status ready">自动锁定</strong></div><SettingToggle label="自动匹配品牌资产" description="暂未开放：后续接入品牌资产服务后启用" checked={settings.autoMatch} disabled onChange={value=>setSettings({...settings,autoMatch:value})}/><SettingToggle label="生成结果必须人工审核" description="保留为后续 AI 生成能力的审核规则" checked={settings.requireReview} disabled onChange={value=>setSettings({...settings,requireReview:value})}/></>}
       {tab==='品牌资产'&&<><div className="settings-head"><div><h2>品牌资产</h2><p>能力暂缓，保留未来接入企业 DAM 的配置位。</p></div></div><div className="integration-card unavailable-card"><ImageSquare/><div><b>PDP Lab 本地资产库</b><span>暂未开放</span></div><em>未启用</em></div><div className="integration-card unavailable-card"><FolderOpen/><div><b>企业 DAM</b><span>等待后续配置 API 地址和访问凭据</span></div><button disabled>暂未开放</button></div></>}
       {tab==='集成服务'&&<><div className="settings-head"><div><h2>集成服务</h2><p>AI 模型 API 与 PDP Skill 在管理后台拥有彼此独立的配置入口。</p></div></div><div className="integration-card"><Sparkle/><div><b>AI 页面理解</b><span>{diagnosisConfig?.active_adapter==='openai' ? `OpenAI 兼容接口 · ${diagnosisConfig.model_name} · ${diagnosisConfig.ai_protocol === 'chat_completions' ? 'Chat Completions' : 'Responses'}` : `当前为 Mock 安全阻断 · 待启用模型 ${diagnosisConfig?.configured_model_name || 'gpt-5.4-mini'}`} · {diagnosisConfig?.ai_config_source === 'admin' ? '后台独立配置' : '环境变量'}</span></div><em className={diagnosisConfig?.openai_configured?'config-status ready':'config-status'}>{diagnosisConfig?.openai_configured?'密钥已配置':'等待密钥'}</em></div><div className="integration-card"><ShieldCheck/><div><b>PDP 评分 Skill</b><span>{diagnosisConfig?.source_skill || 'pdp-detail-page-methodology'} · {diagnosisConfig?.skill_mode === 'remote_http' ? diagnosisConfig?.skill_endpoint_url : '内置版本化规则'}{ruleRevision ? ` · ${ruleRevision}` : ''} · {diagnosisConfig?.skill_config_source === 'admin' ? '后台独立配置' : '默认配置'}</span></div><em className="config-status ready">{diagnosisConfig?.scoring_standard_version || 'pdp-v1'}</em></div><div className="integration-card unavailable-card"><ImageSquare/><div><b>AI 图像生成</b><span>当前版本暂缓开放</span></div><em>未启用</em></div></>}
-      {tab==='团队权限'&&<><div className="settings-head"><div><h2>团队权限</h2><p>控制项目成员与定期报告。</p></div></div><div className="member-row"><div className="avatar">PW</div><div><b>power</b><span>powercwal@qq.com</span></div><em>超级管理员</em></div><SettingToggle label="每周项目摘要" description="每周一向团队管理员发送项目进展摘要" checked={settings.weeklyDigest} onChange={value=>setSettings({...settings,weeklyDigest:value})}/></>}
+      {tab==='团队权限'&&<><div className="settings-head"><div><h2>团队权限</h2><p>控制项目成员与定期报告。</p></div></div><div className="member-row"><UserAvatar user={currentUser}/><div><b>{currentUser?.nickname || currentUser?.username || '用户'}</b><span>{currentUser?.email || '未设置邮箱'}</span></div><em>{userRoleLabel(currentUser)}</em></div><SettingToggle label="每周项目摘要" description="每周一向团队管理员发送项目进展摘要" checked={settings.weeklyDigest} onChange={value=>setSettings({...settings,weeklyDigest:value})}/></>}
       <div className="settings-actions"><button className="primary" onClick={()=>onSaved('系统设置已保存')}>保存设置</button></div>
     </div>
   </section>;

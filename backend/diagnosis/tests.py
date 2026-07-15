@@ -1,4 +1,6 @@
+import base64
 import json
+import tempfile
 from types import SimpleNamespace
 
 from django.conf import settings
@@ -7,7 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from .models import AiModelSettings, DiagnosisJob, DiagnosisVersion, PdpSkillSettings, PdpSource, Project, ScoringStandard
+from .models import AiModelSettings, DiagnosisJob, DiagnosisVersion, PdpSkillSettings, PdpSource, Project, ScoringStandard, UserProfile
 from .adapters.openai import EvidenceSuggestion, ModuleSuggestion, OpenAIDiagnosisAdapter, PdpDiagnosisOutput
 from .runtime_config import get_runtime_integration_config
 from .scoring import map_overall_rating
@@ -170,6 +172,16 @@ class DiagnosisApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(register.status_code, 201)
+        self.assertEqual(register.json()["user"]["nickname"], "设计师")
+        self.assertEqual(register.json()["user"]["avatar_url"], "")
+        registered_user = get_user_model().objects.get(username="designer")
+        self.assertFalse(registered_user.is_staff)
+        self.assertFalse(registered_user.is_superuser)
+        self.assertRedirects(
+            self.client.get("/admin/"),
+            "/admin/login/?next=/admin/",
+            fetch_redirect_response=False,
+        )
         self.client.post(reverse("auth-logout"))
         login = self.client.post(
             reverse("auth-login"),
@@ -185,6 +197,37 @@ class DiagnosisApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(email_login.status_code, 200)
+
+    def test_admin_rejects_staff_user_without_superuser_permission(self):
+        staff_user = get_user_model().objects.create_user(
+            username="operator",
+            email="operator@example.com",
+            password="12345678",
+            is_staff=True,
+            is_superuser=False,
+        )
+        self.client.force_login(staff_user)
+        self.assertRedirects(
+            self.client.get("/admin/"),
+            "/admin/login/?next=/admin/",
+            fetch_redirect_response=False,
+        )
+        self.client.logout()
+        login = self.client.post(
+            "/admin/login/?next=/admin/",
+            {"username": "operator", "password": "12345678", "next": "/admin/"},
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertContains(login, "仅超级管理员可登录管理后台")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+        superuser = get_user_model().objects.create_superuser(
+            username="admin-check",
+            email="admin-check@example.com",
+            password="12345678",
+        )
+        self.client.force_login(superuser)
+        self.assertEqual(self.client.get("/admin/").status_code, 200)
 
     def test_register_rejects_invalid_or_duplicate_email(self):
         invalid = self.client.post(
@@ -275,6 +318,56 @@ class DiagnosisApiTests(TestCase):
         )
         self.assertEqual(upload.status_code, 201)
         self.assertEqual(upload.json()["source"]["original_name"], "pdp.png")
+
+    def test_avatar_upload_is_persisted_and_returned_by_session_endpoints(self):
+        user = get_user_model().objects.create_user(
+            "avatar-user",
+            password="12345678",
+            email="avatar@example.com",
+            first_name="KK",
+        )
+        self.client.force_login(user)
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            response = self.client.post(
+                reverse("profile-avatar"),
+                {"avatar": SimpleUploadedFile("avatar.png", png, content_type="image/png")},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("/media/user_avatars/", response.json()["avatar_url"])
+            profile = UserProfile.objects.get(user=user)
+            self.assertTrue(profile.avatar.name.endswith(".png"))
+            first_avatar_name = profile.avatar.name
+
+            replacement = self.client.post(
+                reverse("profile-avatar"),
+                {"avatar": SimpleUploadedFile("replacement.png", png, content_type="image/png")},
+            )
+            self.assertEqual(replacement.status_code, 200)
+            profile.refresh_from_db()
+            self.assertNotEqual(profile.avatar.name, first_avatar_name)
+            self.assertFalse(profile.avatar.storage.exists(first_avatar_name))
+
+            me = self.client.get(reverse("auth-me"))
+            self.assertEqual(me.status_code, 200)
+            self.assertEqual(me.json()["user"]["avatar_url"], replacement.json()["avatar_url"])
+            self.assertEqual(me.json()["user"]["nickname"], "KK")
+
+            delete = self.client.delete(reverse("profile-avatar"))
+            self.assertEqual(delete.status_code, 200)
+            self.assertEqual(delete.json()["avatar_url"], "")
+
+    def test_avatar_upload_rejects_non_image_content(self):
+        user = get_user_model().objects.create_user("bad-avatar", password="12345678")
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("profile-avatar"),
+            {"avatar": SimpleUploadedFile("avatar.txt", b"not-an-image", content_type="text/plain")},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "头像仅支持 JPG、PNG 或 WebP")
 
     def test_complete_diagnosis_is_versioned_and_incomplete_diagnosis_is_rejected(self):
         user = get_user_model().objects.create_user("reviewer", password="12345678")

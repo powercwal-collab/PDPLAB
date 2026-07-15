@@ -1,5 +1,6 @@
 import json
 
+from PIL import Image, UnidentifiedImageError
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
@@ -19,6 +20,7 @@ from .models import (
     PdpSource,
     Project,
     ScoringStandard,
+    UserProfile,
 )
 from .scoring import DEFAULT_SCORING_RULES, map_overall_rating
 from .tasks import run_diagnosis_job
@@ -165,6 +167,24 @@ def _payload(request):
         return {}
 
 
+def _serialize_user(user):
+    profile = getattr(user, "pdp_profile", None)
+    avatar_url = ""
+    if profile and profile.avatar:
+        try:
+            avatar_url = profile.avatar.url
+        except ValueError:
+            avatar_url = ""
+    return {
+        "username": user.username,
+        "nickname": user.first_name,
+        "email": user.email,
+        "avatar_url": avatar_url,
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
+    }
+
+
 def login_view(request):
     if request.method != "POST":
         return JsonResponse({"error": "仅支持 POST 请求"}, status=405)
@@ -189,7 +209,7 @@ def login_view(request):
         return JsonResponse({"error": "账号或密码不正确"}, status=400)
     cache.delete(rate_key)
     login(request, user)
-    return JsonResponse({"user": {"username": user.username, "nickname": user.first_name, "email": user.email}})
+    return JsonResponse({"user": _serialize_user(user)})
 
 
 def register_view(request):
@@ -210,7 +230,13 @@ def register_view(request):
         return JsonResponse({"error": "用户名为空或已被使用"}, status=400)
     if User.objects.filter(email__iexact=email).exists():
         return JsonResponse({"error": "该电子邮箱已被注册"}, status=400)
-    user = User(username=username, email=email, first_name=data.get("nickname", "").strip())
+    user = User(
+        username=username,
+        email=email,
+        first_name=data.get("nickname", "").strip(),
+        is_staff=False,
+        is_superuser=False,
+    )
     try:
         validate_password(password, user=user)
     except ValidationError as error:
@@ -218,7 +244,7 @@ def register_view(request):
     user.set_password(password)
     user.save()
     login(request, user)
-    return JsonResponse({"user": {"username": user.username, "nickname": user.first_name, "email": user.email}}, status=201)
+    return JsonResponse({"user": _serialize_user(user)}, status=201)
 
 
 def logout_view(request):
@@ -232,21 +258,67 @@ def logout_view(request):
 def me_view(request):
     if not request.user.is_authenticated:
         return JsonResponse({"authenticated": False}, status=401)
-    return JsonResponse({"authenticated": True, "user": {"username": request.user.username, "nickname": request.user.first_name, "email": request.user.email}})
+    return JsonResponse({"authenticated": True, "user": _serialize_user(request.user)})
 
 
 def profile_view(request):
     if not request.user.is_authenticated:
         return JsonResponse({"error": "请先登录"}, status=401)
     if request.method == "GET":
-        return JsonResponse({"username": request.user.username, "nickname": request.user.first_name, "email": request.user.email})
+        return JsonResponse(_serialize_user(request.user))
     if request.method in {"POST", "PATCH"}:
         data = _payload(request)
+        email = data.get("email", request.user.email).strip()
+        try:
+            validate_email(email)
+        except ValidationError:
+            return JsonResponse({"error": "请输入有效的电子邮箱"}, status=400)
+        User = get_user_model()
+        if User.objects.exclude(pk=request.user.pk).filter(email__iexact=email).exists():
+            return JsonResponse({"error": "该电子邮箱已被注册"}, status=400)
         request.user.first_name = data.get("nickname", request.user.first_name).strip()
-        request.user.email = data.get("email", request.user.email).strip()
+        request.user.email = email
         request.user.save(update_fields=["first_name", "email"])
-        return JsonResponse({"username": request.user.username, "nickname": request.user.first_name, "email": request.user.email})
+        return JsonResponse(_serialize_user(request.user))
     return JsonResponse({"error": "不支持的请求方式"}, status=405)
+
+
+def profile_avatar_view(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "请先登录"}, status=401)
+    if request.method == "DELETE":
+        profile = getattr(request.user, "pdp_profile", None)
+        if profile and profile.avatar:
+            avatar = profile.avatar
+            profile.avatar = ""
+            profile.save(update_fields=["avatar", "updated_at"])
+            avatar.delete(save=False)
+        return JsonResponse(_serialize_user(request.user))
+    if request.method != "POST":
+        return JsonResponse({"error": "仅支持 POST 或 DELETE 请求"}, status=405)
+
+    uploaded = request.FILES.get("avatar")
+    if uploaded is None:
+        return JsonResponse({"error": "请选择头像图片"}, status=400)
+    if uploaded.size > 5 * 1024 * 1024:
+        return JsonResponse({"error": "头像文件不能超过 5MB"}, status=400)
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if uploaded.content_type not in allowed_types:
+        return JsonResponse({"error": "头像仅支持 JPG、PNG 或 WebP"}, status=400)
+    try:
+        Image.open(uploaded).verify()
+        uploaded.seek(0)
+    except (UnidentifiedImageError, OSError, ValueError):
+        return JsonResponse({"error": "头像文件无法识别或已损坏"}, status=400)
+
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    old_avatar_name = profile.avatar.name if profile.avatar else ""
+    avatar_storage = profile.avatar.storage
+    profile.avatar = uploaded
+    profile.save(update_fields=["avatar", "updated_at"])
+    if old_avatar_name and old_avatar_name != profile.avatar.name:
+        avatar_storage.delete(old_avatar_name)
+    return JsonResponse(_serialize_user(request.user))
 
 
 def preference_view(request):
