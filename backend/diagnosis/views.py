@@ -455,7 +455,8 @@ def diagnosis_list(request):
     if abs(calculated_total - submitted_total) > 0.01:
         return JsonResponse({"error": "总分与模块得分不一致"}, status=400)
 
-    overall_rating = map_overall_rating(submitted_total)
+    standard = resolve_scoring_standard()
+    overall_rating = map_overall_rating(submitted_total, standard.rules)
     with transaction.atomic():
         latest = DiagnosisVersion.objects.filter(project=project).aggregate(value=Max("version"))["value"] or 0
         diagnosis = DiagnosisVersion.objects.create(
@@ -464,7 +465,7 @@ def diagnosis_list(request):
             total_score=submitted_total,
             overall_rating=overall_rating,
             modules=modules,
-            scoring_standard_version="pdp-v1",
+            scoring_standard_version=standard.version,
             confirmation_mode="manual",
             status="locked",
             created_by=request.user,

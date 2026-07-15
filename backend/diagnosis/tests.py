@@ -12,7 +12,7 @@ from django.urls import reverse
 from .models import AiModelSettings, DiagnosisJob, DiagnosisVersion, PdpSkillSettings, PdpSource, Project, ScoringStandard, UserProfile
 from .adapters.openai import EvidenceSuggestion, ModuleSuggestion, OpenAIDiagnosisAdapter, PdpDiagnosisOutput
 from .runtime_config import get_runtime_integration_config
-from .scoring import map_overall_rating
+from .scoring import apply_evidence_guards, calculate_assessments, map_overall_rating
 from .skill_runtime import _validate_remote_rules
 from .tasks import run_diagnosis_job
 
@@ -67,7 +67,7 @@ class DiagnosisApiTests(TestCase):
         response = self.client.get(reverse("diagnosis-config"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["source_skill"], "pdp-detail-page-methodology")
-        self.assertEqual(response.json()["scoring_standard_version"], "pdp-v1")
+        self.assertEqual(response.json()["scoring_standard_version"], "pdp-v2")
         self.assertIn(response.json()["ai_protocol"], {"responses", "chat_completions"})
         self.assertEqual(response.json()["confirmation_mode"], "ai_auto")
         self.assertIn(response.json()["active_adapter"], {"mock", "openai"})
@@ -103,7 +103,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(runtime["api_key"], "sk-private-test-value")
 
     def test_latest_builtin_rules_pass_remote_skill_contract_validation(self):
-        rules = ScoringStandard.objects.get(version="pdp-v1").rules
+        rules = ScoringStandard.objects.get(version="pdp-v2").rules
         _validate_remote_rules(rules)
         self.assertEqual(rules["coefficients"], {"弱": 0, "中": 0.5, "强": 1})
         self.assertEqual(len(rules["star_bands"]), 13)
@@ -441,6 +441,62 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(map_overall_rating(65), 5)
         self.assertEqual(map_overall_rating(80), 6)
         self.assertEqual(map_overall_rating(90), 7)
+
+    def test_evidence_gates_override_formal_presence_without_qualifying_visuals(self):
+        rules = ScoringStandard.objects.get(version="pdp-v2").rules
+        suggestions = [
+            {"module_code": item["code"], "coefficient": 1, "judgment": "模型认为完整", "confidence": 0.9}
+            for item in rules["modules"]
+        ]
+        evidence = []
+        for item in rules["modules"]:
+            code = item["code"]
+            evidence_type = "product_proof"
+            if code == "product_kv":
+                evidence_type = "hero_copy_only"
+            elif code == "scenario":
+                evidence_type = "studio_model_view"
+            elif code == "recommendation":
+                evidence_type = "generic_or_decorative"
+            elif code == "endorsement":
+                evidence_type = "logo_only"
+            elif code == "fit_comparison":
+                evidence_type = "measurement_method"
+            evidence.append({"module_code": code, "evidence_type": evidence_type})
+
+        guarded = {item["module_code"]: item for item in apply_evidence_guards(suggestions, evidence, rules)}
+        self.assertEqual(guarded["product_kv"]["coefficient"], 0)
+        self.assertEqual(guarded["scenario"]["coefficient"], 0)
+        self.assertEqual(guarded["recommendation"]["coefficient"], 0)
+        self.assertEqual(guarded["endorsement"]["coefficient"], 0)
+        self.assertEqual(guarded["fit_comparison"]["coefficient"], 0.5)
+        self.assertEqual(guarded["page_rhythm"]["coefficient"], 0.5)
+        modules, total, stars = calculate_assessments(list(guarded.values()), rules)
+        self.assertEqual(len(modules), 11)
+        self.assertLess(total, 100)
+        self.assertLess(stars, 7)
+
+    def test_evidence_gates_accept_qualifying_kv_scene_recommendation_and_backing(self):
+        rules = ScoringStandard.objects.get(version="pdp-v2").rules
+        suggestions = [
+            {"module_code": item["code"], "coefficient": 1, "judgment": "证据充分", "confidence": 0.9}
+            for item in rules["modules"]
+        ]
+        types = {
+            "product_kv": "product_hero_visual", "scenario": "sport_scene",
+            "recommendation": "outfit_recommendation", "endorsement": "technology_source",
+            "fit_comparison": "measurement_method",
+        }
+        evidence = []
+        for item in rules["modules"]:
+            evidence.append({"module_code": item["code"], "evidence_type": types.get(item["code"], "product_proof")})
+        evidence.append({"module_code": "fit_comparison", "evidence_type": "fit_advice"})
+        guarded = {item["module_code"]: item for item in apply_evidence_guards(suggestions, evidence, rules)}
+        self.assertEqual(guarded["product_kv"]["coefficient"], 1)
+        self.assertEqual(guarded["scenario"]["coefficient"], 1)
+        self.assertEqual(guarded["recommendation"]["coefficient"], 1)
+        self.assertEqual(guarded["endorsement"]["coefficient"], 1)
+        self.assertEqual(guarded["fit_comparison"]["coefficient"], 1)
 
     def test_async_job_worker_creates_evidence_and_auto_locked_version(self):
         user = get_user_model().objects.create_user("auto-reviewer", password="12345678")

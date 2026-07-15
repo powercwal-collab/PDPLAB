@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from .adapters import get_diagnosis_adapter
 from .models import DiagnosisJob, DiagnosisVersion, ModelRun, ModuleAssessment, PageEvidence, PdpSource, Project
-from .scoring import calculate_assessments
+from .scoring import apply_evidence_guards, calculate_assessments
 
 
 def _update_job(job_id, *, status="processing", stage, progress):
@@ -46,7 +46,10 @@ def run_diagnosis_job(job_id):
             scoring_rules=job.scoring_standard.rules,
         )
         _update_job(job_id, stage="scoring", progress=84)
-        modules, total_score, overall_rating = calculate_assessments(result["modules"], job.scoring_standard.rules)
+        trusted_suggestions = apply_evidence_guards(
+            result["modules"], result.get("evidence", []), job.scoring_standard.rules,
+        )
+        modules, total_score, overall_rating = calculate_assessments(trusted_suggestions, job.scoring_standard.rules)
 
         with transaction.atomic():
             locked_project = Project.objects.select_for_update().get(pk=job.project_id)

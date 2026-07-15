@@ -34,6 +34,19 @@ class MockDiagnosisAdapter(DiagnosisModelAdapter):
         }
         modules = []
         evidence = []
+        evidence_types = {
+            "product_kv": "product_hero_visual",
+            "scenario": "real_use_scene",
+            "selling_point_proof": "product_proof",
+            "interactive_content": "missing_content",
+            "detail_review": "detail_view",
+            "fit_comparison": "fit_advice",
+            "basic_information": "basic_information",
+            "service": "service_policy",
+            "recommendation": "related_product_recommendation",
+            "endorsement": "brand_asset_proof",
+            "page_rhythm": "page_structure",
+        }
         for index, definition in enumerate(scoring_rules["modules"]):
             code = definition["code"]
             modules.append({
@@ -46,7 +59,7 @@ class MockDiagnosisAdapter(DiagnosisModelAdapter):
                 "module_code": code,
                 "page_index": index,
                 "bbox": {"x": 0.08, "y": min(0.82, 0.06 + index * 0.07), "width": 0.84, "height": 0.12},
-                "evidence_type": "mock_page_region",
+                "evidence_type": evidence_types[code],
                 "ocr_text": f"{definition['name']}：示例识别证据",
                 "reason": judgments[code],
                 "confidence": 0.82,

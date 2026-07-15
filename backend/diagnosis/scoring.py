@@ -1,16 +1,16 @@
 DEFAULT_SCORING_RULES = {
-    "version": "pdp-v1",
+    "version": "pdp-v2",
     "source_skill": "pdp-detail-page-methodology",
     "source_mode": "versioned_runtime_rules",
-    "source_revision": "sha256:14b427e36ad81f75706f2e4fa2d76e5f087915a066e72221e59c1cd4c368a670",
-    "skill_manifest_revision": "sha256:82ae404654c9ff9c57a2f1fe603abaf31fee7fb00c727471cdbde3c9330ba901",
+    "source_revision": "sha256:19843d4c2a4c2ae889e13d0245800336fe3adc145253314f5e277ddf5eb9e78c",
+    "skill_manifest_revision": "sha256:19843d4c2a4c2ae889e13d0245800336fe3adc145253314f5e277ddf5eb9e78c",
     "coefficients": {"弱": 0, "中": 0.5, "强": 1},
     "maturity_definitions": {
         "弱": "无对应模块，用户无法在页面中获得该类购买决策信息",
         "中": "有对应模块，但信息浅或视觉弱；设计信息与视觉素材任一维度不达标都会影响消费者继续理解",
         "强": "有对应模块，且设计信息与视觉素材都围绕消费者需求展开，内容、证据、视觉表达与购买决策高度契合",
     },
-    "judgment_order": ["模块存在性", "设计信息与视觉素材质量", "T1/T0 视觉层级匹配", "消费者需求匹配"],
+    "judgment_order": ["有效存在性", "模块强制归零条件", "设计信息与视觉素材质量", "T1/T0 视觉层级匹配", "消费者需求匹配"],
     "modules": [
         {"code": "product_kv", "name": "产品KV/封面故事", "weight": 10, "strong_standard": "0.5-1屏内讲清产品主张、系列定位、核心卖点和主视觉"},
         {"code": "scenario", "name": "沉浸式购物/场景化", "weight": 18, "strong_standard": "场景覆盖真实使用、穿搭、运动状态和情绪代入"},
@@ -40,6 +40,84 @@ DEFAULT_SCORING_RULES = {
         {"lt": 101, "rating": 7, "page_type": "标杆增长页", "business_meaning": "形成品牌级内容资产"},
     ],
 }
+
+
+# Evidence categories are a server contract, rather than a cosmetic prompt hint.  They
+# allow the scoring engine to reject a model coefficient that is supported only by a
+# title, logo, blank shell, or studio image.  Historic versions keep their saved score;
+# these guards apply only while a new job is being calculated.
+NON_QUALIFYING_EVIDENCE = {
+    "missing_content", "generic_or_decorative", "empty_shell", "template_block",
+    "generic_icon_row", "hero_copy_only", "logo_only", "studio_model_view",
+}
+
+MODULE_EVIDENCE_GATES = {
+    "product_kv": {"product_hero_visual", "campaign_cover"},
+    "scenario": {"real_use_scene", "lifestyle_scene", "sport_scene", "movement_scene", "styling_scene"},
+    "recommendation": {"related_product_recommendation", "series_recommendation", "outfit_recommendation"},
+    "endorsement": {"certification", "award", "institutional_endorsement", "technology_source", "attributable_review", "brand_asset_proof"},
+}
+
+FIT_STRONG_EVIDENCE = {
+    "measurement_method", "fit_advice", "model_body_profile", "tryon_feedback", "series_comparison",
+}
+
+
+def apply_evidence_guards(adapter_modules, evidence, rules=None):
+    """Apply the PDP Skill's deterministic existence and hard-gate rules.
+
+    The AI can identify evidence and propose a discrete coefficient, but it cannot
+    override a zero-score gate.  This deliberately works on typed evidence only;
+    untyped legacy ``page_region`` evidence remains compatible but cannot prove a
+    module-specific gate on its own.
+    """
+    suggestions = {item["module_code"]: dict(item) for item in adapter_modules}
+    evidence_by_module = {}
+    for item in evidence or []:
+        evidence_by_module.setdefault(item.get("module_code"), []).append(item.get("evidence_type", "page_region"))
+
+    def force_zero(code, reason):
+        suggestion = suggestions[code]
+        if float(suggestion.get("coefficient", 0)) != 0:
+            suggestion["coefficient"] = 0
+            suggestion["judgment"] = f"{reason} 原模型判断：{suggestion.get('judgment', '')}"[:800]
+
+    for code, suggestion in suggestions.items():
+        types = set(evidence_by_module.get(code, []))
+        if types and types.issubset(NON_QUALIFYING_EVIDENCE):
+            force_zero(code, "未发现能回答具体购买问题的有效产品证据，形式性区块不计入模块存在。")
+
+    for code, qualifying_types in MODULE_EVIDENCE_GATES.items():
+        types = set(evidence_by_module.get(code, []))
+        if not (types & qualifying_types):
+            labels = {
+                "product_kv": "未发现产品主导的英雄视觉；仅文案、标题或卖点文字不能作为 KV。",
+                "scenario": "未发现真实使用、运动、生活或穿搭场景；白/灰底模特与正背面展示不计作场景。",
+                "recommendation": "未发现基于系列、场景、穿搭或用户意图的真实关联推荐；仅颜色/SKU 选项不计入推荐。",
+                "endorsement": "未发现可归因的认证、机构、科技来源、口碑或品牌资产证据；单独 Logo 不计入背书。",
+            }
+            force_zero(code, labels[code])
+
+    fit = suggestions.get("fit_comparison")
+    if fit and float(fit.get("coefficient", 0)) == 1:
+        fit_types = set(evidence_by_module.get("fit_comparison", []))
+        if len(fit_types & FIT_STRONG_EVIDENCE) < 2:
+            fit["coefficient"] = 0.5
+            fit["judgment"] = (
+                "仅有尺码表或单一适配信息，不足以达到“强”；需同时提供测量方式、版型建议、模特/试穿或系列对比等至少两类依据。 原模型判断："
+                + fit.get("judgment", "")
+            )[:800]
+
+    rhythm = suggestions.get("page_rhythm")
+    if rhythm and float(rhythm.get("coefficient", 0)) == 1:
+        if float(suggestions.get("product_kv", {}).get("coefficient", 0)) == 0 or float(suggestions.get("scenario", {}).get("coefficient", 0)) == 0:
+            rhythm["coefficient"] = 0.5
+            rhythm["judgment"] = (
+                "缺少有效 KV 或真实场景，页面尚未形成完整的“封面—沉浸—证明—决策—信任”叙事，结构节奏最高计为中。 原模型判断："
+                + rhythm.get("judgment", "")
+            )[:800]
+
+    return [suggestions[item["module_code"]] for item in adapter_modules]
 
 
 def map_overall_rating(total_score, rules=None):
