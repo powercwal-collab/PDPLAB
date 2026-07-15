@@ -174,9 +174,16 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(register.status_code, 201)
         self.assertEqual(register.json()["user"]["nickname"], "设计师")
         self.assertEqual(register.json()["user"]["avatar_url"], "")
+        self.assertFalse(register.json()["user"]["is_staff"])
+        self.assertFalse(register.json()["user"]["is_superuser"])
         registered_user = get_user_model().objects.get(username="designer")
         self.assertFalse(registered_user.is_staff)
         self.assertFalse(registered_user.is_superuser)
+        session_user = self.client.get(reverse("auth-me"))
+        self.assertEqual(session_user.status_code, 200)
+        self.assertEqual(session_user.json()["user"]["username"], "designer")
+        self.assertFalse(session_user.json()["user"]["is_staff"])
+        self.assertFalse(session_user.json()["user"]["is_superuser"])
         self.assertRedirects(
             self.client.get("/admin/"),
             "/admin/login/?next=/admin/",
