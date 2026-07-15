@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -26,11 +27,21 @@ jobs:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       PDP_ENV_FILE: /srv/pdp-lab/shared/.env.production
     steps:
-      - name: Checkout verified main commit
-        uses: actions/checkout@v4
+      - name: Download verified CI source
+        uses: actions/download-artifact@v4
         with:
-          ref: ${{ env.DEPLOY_SHA }}
-          fetch-depth: 1
+          name: production-source-${{ env.DEPLOY_SHA }}
+          path: .verified-release
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract verified CI source
+        run: |
+          set -euo pipefail
+          ARCHIVE=".verified-release/pdp-lab-${DEPLOY_SHA}.tar.gz"
+          test -s "$ARCHIVE"
+          mkdir -p .verified-source
+          tar -xzf "$ARCHIVE" -C .verified-source
 
       - name: Verify production prerequisites
         run: |
@@ -57,7 +68,7 @@ jobs:
             --exclude 'node_modules' \
             --exclude 'dist' \
             --exclude 'backend/media' \
-            ./ "$RELEASE/"
+            .verified-source/ "$RELEASE/"
           printf '%s\n' \
             "sha=${DEPLOY_SHA}" \
             "run_id=${GITHUB_RUN_ID}" \
