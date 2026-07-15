@@ -204,6 +204,7 @@ export function App() {
   const [latestDiagnosis, setLatestDiagnosis] = useState(null);
   const [diagnosisJob, setDiagnosisJob] = useState(null);
   const [diagnosisConfig, setDiagnosisConfig] = useState(null);
+  const [uploadProjectId, setUploadProjectId] = useState(null);
   const unavailableEntries = new Set(['品牌资产', 'AI 创作']);
 
   useEffect(() => {
@@ -334,24 +335,24 @@ export function App() {
               <div className="project-switcher" ref={projectSwitcherRef}>
                 <button className="switch-project" aria-haspopup="menu" aria-expanded={projectMenuOpen} onClick={() => setProjectMenuOpen(open => !open)}><FolderOpen size={18} /><span>切换项目</span><CaretDown size={13} /></button>
                 {projectMenuOpen && <div className="project-menu" role="menu" aria-label="切换项目">
-                  <ProjectMenuPanel projects={projects} selectedName={currentProject} onSelect={(project) => { setCurrentProject(project.name); setActive('项目总览'); setProjectMenuOpen(false); triggerToast(`已切换至 ${project.name}`); }} onCreate={() => { setActive('导入 PDP'); setProjectMenuOpen(false); }} />
+                  <ProjectMenuPanel projects={projects} selectedName={currentProject} onSelect={(project) => { setCurrentProject(project.name); setActive('项目总览'); setProjectMenuOpen(false); triggerToast(`已切换至 ${project.name}`); }} onCreate={() => { setUploadProjectId(null); setActive('导入 PDP'); setProjectMenuOpen(false); }} />
                 </div>}
               </div>
-              <button className="secondary" onClick={() => setActive('导入 PDP')}><UploadSimple size={18} /> 导入新版本</button>
+              <button className="secondary" onClick={() => { setUploadProjectId(currentProjectData?.id || null); setActive('导入 PDP'); }}><UploadSimple size={18} /> 导入新版本</button>
               <button className="primary" onClick={() => {setActive('优化路线'); triggerToast('已进入 P0 优化路线');}}>查看 P0 优化路线 <ArrowRight size={18} /></button>
               </>}
             </div>
           </header>}
 
-          {active === '首页' && <HomePage projects={projects} onViewAll={() => setActive('全部项目')} onOpenProject={(name) => { setCurrentProject(name); setActive('项目总览'); }} onImport={() => setActive('导入 PDP')} />}
-          {active === '全部项目' && <AllProjectsPage projects={projects} onBack={() => setActive('首页')} onOpenProject={(name) => { setCurrentProject(name); setActive('项目总览'); }} onCreate={() => setActive('导入 PDP')} />}
+          {active === '首页' && <HomePage projects={projects} onViewAll={() => setActive('全部项目')} onOpenProject={(name) => { setCurrentProject(name); setActive('项目总览'); }} onImport={() => { setUploadProjectId(null); setActive('导入 PDP'); }} />}
+          {active === '全部项目' && <AllProjectsPage projects={projects} onBack={() => setActive('首页')} onOpenProject={(name) => { setCurrentProject(name); setActive('项目总览'); }} onCreate={() => { setUploadProjectId(null); setActive('导入 PDP'); }} />}
           {active === '项目总览' && <Dashboard diagnosis={latestDiagnosis} ruleModules={activeRuleModules} starBands={activeStarBands} gapItems={projectGapItems} taskItems={projectTasks} onRoute={() => setActive('优化路线')} />}
           {active === '评分诊断' && <Diagnosis diagnosis={latestDiagnosis} ruleModules={activeRuleModules} onReview={() => setActive('评分确认')} />}
           {active === '评分记录' && <DiagnosisHistoryPage projectId={currentProjectData?.id} projectName={currentProject} onSelected={setLatestDiagnosis} onDeleted={(result, nextSelected) => { setLatestDiagnosis(nextSelected || null); api.projects().then(data => setProjects(data.results)).catch(() => {}); triggerToast(`评分版本 v${result.deleted_version} 已删除`); }} />}
           {active === '优化路线' && (
             <TaskRoute query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} visibleTasks={visibleTasks} tasks={projectTasks} currentScore={latestDiagnosis?.total_score ?? projectModules.reduce((sum,module) => sum + Number(module.score || 0), 0)} starBands={activeStarBands} expanded={expanded} setExpanded={setExpanded} />
           )}
-          {active === '导入 PDP' && <UploadPage projects={projects} diagnosisConfig={diagnosisConfig} onProjectCreated={(project) => setProjects(prev => [project, ...prev])} onCancel={() => setActive('首页')} onFinish={(project, job) => { if (project?.name) setCurrentProject(project.name); setDiagnosisJob(job); setActive('诊断进度'); triggerToast('PDP 已上传，AI 诊断任务已创建'); }} />}
+          {active === '导入 PDP' && <UploadPage projects={projects} initialProjectId={uploadProjectId} diagnosisConfig={diagnosisConfig} onProjectCreated={(project) => setProjects(prev => [project, ...prev])} onCancel={() => { setActive(uploadProjectId ? '项目总览' : '首页'); setUploadProjectId(null); }} onFinish={(project, job) => { if (project?.name) setCurrentProject(project.name); setUploadProjectId(null); setDiagnosisJob(job); setActive('诊断进度'); triggerToast('PDP 已上传，AI 诊断任务已创建'); }} />}
           {active === '诊断进度' && <AnalysisPage job={diagnosisJob} onBack={() => setActive('首页')} onComplete={(job) => { setLatestDiagnosis(job.diagnosis || null); setActive('评分记录'); triggerToast(`AI 评分版本 v${job.diagnosis?.version || 1} 已自动锁定`); }} />}
           {active === '评分确认' && <ScoreReviewPage initialModules={latestDiagnosis?.modules || activeRuleModules} starBands={activeStarBands} onConfirm={async (payload) => { if (!currentProjectData?.id) throw new Error('当前项目尚未同步，请返回首页重新选择项目'); const data = await api.saveDiagnosis({ ...payload, project_id:currentProjectData.id }); setLatestDiagnosis(data.diagnosis); setActive('评分记录'); triggerToast(`评分版本 v${data.diagnosis.version} 已锁定`); }} />}
           {active === '品牌资产匹配' && <AssetMatchPage onGenerate={(ids) => { setGenerationAssets(ids); setActive('AI 生成'); }} />}
@@ -654,8 +655,8 @@ function AllProjectsPage({ projects, onBack, onOpenProject, onCreate }) {
   </section>;
 }
 
-function UploadPage({ projects, diagnosisConfig, onProjectCreated, onCancel, onFinish }) {
-  const [projectId, setProjectId] = useState('');
+function UploadPage({ projects, initialProjectId, diagnosisConfig, onProjectCreated, onCancel, onFinish }) {
+  const [projectId, setProjectId] = useState(initialProjectId ? String(initialProjectId) : '');
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [newProject, setNewProject] = useState({ name: '', brand: '', category: '' });
   const [file, setFile] = useState(null);
@@ -664,6 +665,7 @@ function UploadPage({ projects, diagnosisConfig, onProjectCreated, onCancel, onF
   const [failure, setFailure] = useState(null);
   const projectPickerRef = useRef(null);
   const selectedProject = projects.find(project => String(project.id) === String(projectId));
+  const projectLocked = Boolean(initialProjectId && selectedProject);
   useDismissiblePopover(projectPickerOpen, setProjectPickerOpen, projectPickerRef);
   const validateFile = candidate => {
     if (!candidate) return;
@@ -710,15 +712,17 @@ function UploadPage({ projects, diagnosisConfig, onProjectCreated, onCancel, onF
     finally { setUploading(false); }
   };
   return <section className="upload-page">
-    <div className="upload-intro"><span>开始一次诊断</span><h2>选择项目并上传 PDP 内容</h2><p>支持长图、截图、PDF 或网页导出文件。</p></div>
+    <div className="upload-intro"><span>{projectLocked ? '导入项目新版本' : '开始一次诊断'}</span><h2>{projectLocked ? `为「${selectedProject.name}」上传新版本` : '选择项目并上传 PDP 内容'}</h2><p>{projectLocked ? '系统已自动识别当前项目，上传后将生成新的评分版本。' : '支持长图、截图、PDF 或网页导出文件。'}</p></div>
     <div className="upload-steps">
       <div className="upload-step">
-        <div className="step-main"><div className="step-label"><span className="step-index">01</span><small>选择项目</small></div><h3>这份 PDP 属于哪个项目？</h3>
-          <div className="upload-project-picker" ref={projectPickerRef}>
-            <button type="button" className="project-select" aria-haspopup="menu" aria-expanded={projectPickerOpen} onClick={() => setProjectPickerOpen(open => !open)}><span>{projectId === '__new__' ? '创建新项目' : selectedProject?.name || '请选择已有项目'}</span>{projectPickerOpen ? <CaretUp /> : <CaretDown />}</button>
-            {projectPickerOpen && <div className="project-menu upload-project-menu" role="menu" aria-label="选择项目"><ProjectMenuPanel projects={projects} selectedId={projectId} onSelect={(project) => { setProjectId(String(project.id)); setError(''); setProjectPickerOpen(false); }} onCreate={() => { setProjectId('__new__'); setError(''); setProjectPickerOpen(false); }} /></div>}
-          </div>
-          {projectId === '__new__' && <div className="new-project-form"><input value={newProject.name} onChange={e=>setNewProject({...newProject,name:e.target.value})} placeholder="项目名称"/><input value={newProject.brand} onChange={e=>setNewProject({...newProject,brand:e.target.value})} placeholder="品牌"/><input value={newProject.category} onChange={e=>setNewProject({...newProject,category:e.target.value})} placeholder="品类"/><button className="secondary" disabled={!newProject.name.trim()} onClick={createProject}>创建并选择</button></div>}
+        <div className="step-main"><div className="step-label"><span className="step-index">01</span><small>{projectLocked ? '已识别项目' : '选择项目'}</small></div><h3>{projectLocked ? '新版本将归入当前项目' : '这份 PDP 属于哪个项目？'}</h3>
+          {projectLocked ? <div className="project-select locked-project" aria-label={`当前项目：${selectedProject.name}`}><span title={selectedProject.name}><FolderOpen />{selectedProject.name}</span><CheckCircle weight="fill" /></div> : <>
+            <div className="upload-project-picker" ref={projectPickerRef}>
+              <button type="button" className="project-select" aria-haspopup="menu" aria-expanded={projectPickerOpen} onClick={() => setProjectPickerOpen(open => !open)}><span>{projectId === '__new__' ? '创建新项目' : selectedProject?.name || '请选择已有项目'}</span>{projectPickerOpen ? <CaretUp /> : <CaretDown />}</button>
+              {projectPickerOpen && <div className="project-menu upload-project-menu" role="menu" aria-label="选择项目"><ProjectMenuPanel projects={projects} selectedId={projectId} onSelect={(project) => { setProjectId(String(project.id)); setError(''); setProjectPickerOpen(false); }} onCreate={() => { setProjectId('__new__'); setError(''); setProjectPickerOpen(false); }} /></div>}
+            </div>
+            {projectId === '__new__' && <div className="new-project-form"><input value={newProject.name} onChange={e=>setNewProject({...newProject,name:e.target.value})} placeholder="项目名称"/><input value={newProject.brand} onChange={e=>setNewProject({...newProject,brand:e.target.value})} placeholder="品牌"/><input value={newProject.category} onChange={e=>setNewProject({...newProject,category:e.target.value})} placeholder="品类"/><button className="secondary" disabled={!newProject.name.trim()} onClick={createProject}>创建并选择</button></div>}
+          </>}
         </div>
         {projectId && projectId !== '__new__' && <CheckCircle className="step-done" weight="fill" />}
       </div>

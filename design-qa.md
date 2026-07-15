@@ -27,6 +27,31 @@
 
 final result: passed
 
+## 3.18 项目新版本自动识别增量 QA
+
+- Source visual truth path: 2026-07-15 当前任务提供的“导入新版本”按钮与上传页项目选择区域批注截图。
+- State A: 首页“上传 PDP 内容”进入上传页。
+- State B: 项目总览“导入新版本”进入上传页。
+
+### Interaction evidence
+
+- 首页入口继续显示“选择项目并上传 PDP 内容”和 `.upload-project-picker`；未选项目时上传控件保持禁用。
+- 工作台入口自动携带当前项目 ID，页面标题显示 `为「版本导入验收项目」上传新版本`。
+- 工作台入口渲染 `.locked-project`，显示“已识别项目 / 新版本将归入当前项目”，不渲染 `.upload-project-picker`。
+- 自动识别态的文件 input 为可用状态，开始识别按钮只等待文件，不再等待重复项目选择。
+- 取消工作台版本导入后返回“项目总览”，面包屑仍为同一项目。
+
+### Runtime checks
+
+- Vite production build: passed。
+- Django system check: passed。
+- Django diagnosis tests: 32/32 passed。
+- Playwright two-entry interaction regression: passed。
+- 本地开发数据库迁移 `0015_pdpsource_content_sha256`: applied。
+- 真实项目 `Nike Vomero 18｜缓震跑鞋详情页` 自动锁定验证: passed；浏览器 QA 未上传文件、未创建评分数据。
+
+final result: passed
+
 - Source visual truth path: `browser://127.0.0.1:4173/` browser annotation screenshots supplied in the current task.
 - Implementation screenshots:
   - `/Users/lixiao/Documents/人设背景提示词/outputs/pdp-lab-prototype/design-qa-project-menu.png`
