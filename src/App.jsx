@@ -658,6 +658,7 @@ function AllProjectsPage({ projects, onBack, onOpenProject, onCreate }) {
 function UploadPage({ projects, initialProjectId, diagnosisConfig, onProjectCreated, onCancel, onFinish }) {
   const [projectId, setProjectId] = useState(initialProjectId ? String(initialProjectId) : '');
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [pendingProjectChange, setPendingProjectChange] = useState(null);
   const [newProject, setNewProject] = useState({ name: '', brand: '', category: '' });
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
@@ -665,8 +666,44 @@ function UploadPage({ projects, initialProjectId, diagnosisConfig, onProjectCrea
   const [failure, setFailure] = useState(null);
   const projectPickerRef = useRef(null);
   const selectedProject = projects.find(project => String(project.id) === String(projectId));
-  const projectLocked = Boolean(initialProjectId && selectedProject);
+  const hasProjectContext = Boolean(initialProjectId);
+  const projectPreselected = Boolean(selectedProject && String(initialProjectId) === String(projectId));
   useDismissiblePopover(projectPickerOpen, setProjectPickerOpen, projectPickerRef);
+  const applyProjectSelection = project => {
+    setProjectId(String(project.id));
+    setError('');
+    setProjectPickerOpen(false);
+  };
+  const requestProjectSelection = project => {
+    if (String(project.id) === String(projectId)) {
+      setProjectPickerOpen(false);
+      return;
+    }
+    if (initialProjectId) {
+      setPendingProjectChange({ type:'select', project });
+      setProjectPickerOpen(false);
+      return;
+    }
+    applyProjectSelection(project);
+  };
+  const requestProjectCreation = () => {
+    if (initialProjectId) {
+      setPendingProjectChange({ type:'create' });
+      setProjectPickerOpen(false);
+      return;
+    }
+    setProjectId('__new__');
+    setError('');
+    setProjectPickerOpen(false);
+  };
+  const confirmProjectChange = () => {
+    if (pendingProjectChange?.type === 'select') applyProjectSelection(pendingProjectChange.project);
+    if (pendingProjectChange?.type === 'create') {
+      setProjectId('__new__');
+      setError('');
+    }
+    setPendingProjectChange(null);
+  };
   const validateFile = candidate => {
     if (!candidate) return;
     const allowed = ['image/png', 'image/jpeg', 'application/pdf'];
@@ -712,17 +749,15 @@ function UploadPage({ projects, initialProjectId, diagnosisConfig, onProjectCrea
     finally { setUploading(false); }
   };
   return <section className="upload-page">
-    <div className="upload-intro"><span>{projectLocked ? '导入项目新版本' : '开始一次诊断'}</span><h2>{projectLocked ? `为「${selectedProject.name}」上传新版本` : '选择项目并上传 PDP 内容'}</h2><p>{projectLocked ? '系统已自动识别当前项目，上传后将生成新的评分版本。' : '支持长图、截图、PDF 或网页导出文件。'}</p></div>
+    <div className="upload-intro"><span>{hasProjectContext ? '导入项目新版本' : '开始一次诊断'}</span><h2>{hasProjectContext ? (selectedProject ? `为「${selectedProject.name}」上传新版本` : '创建新项目并上传 PDP 内容') : '选择项目并上传 PDP 内容'}</h2><p>{projectPreselected ? '系统已优先识别当前项目；如归属有误，可在下方切换。' : '支持长图、截图、PDF 或网页导出文件。'}</p></div>
     <div className="upload-steps">
       <div className="upload-step">
-        <div className="step-main"><div className="step-label"><span className="step-index">01</span><small>{projectLocked ? '已识别项目' : '选择项目'}</small></div><h3>{projectLocked ? '新版本将归入当前项目' : '这份 PDP 属于哪个项目？'}</h3>
-          {projectLocked ? <div className="project-select locked-project" aria-label={`当前项目：${selectedProject.name}`}><span title={selectedProject.name}><FolderOpen />{selectedProject.name}</span><CheckCircle weight="fill" /></div> : <>
-            <div className="upload-project-picker" ref={projectPickerRef}>
-              <button type="button" className="project-select" aria-haspopup="menu" aria-expanded={projectPickerOpen} onClick={() => setProjectPickerOpen(open => !open)}><span>{projectId === '__new__' ? '创建新项目' : selectedProject?.name || '请选择已有项目'}</span>{projectPickerOpen ? <CaretUp /> : <CaretDown />}</button>
-              {projectPickerOpen && <div className="project-menu upload-project-menu" role="menu" aria-label="选择项目"><ProjectMenuPanel projects={projects} selectedId={projectId} onSelect={(project) => { setProjectId(String(project.id)); setError(''); setProjectPickerOpen(false); }} onCreate={() => { setProjectId('__new__'); setError(''); setProjectPickerOpen(false); }} /></div>}
-            </div>
-            {projectId === '__new__' && <div className="new-project-form"><input value={newProject.name} onChange={e=>setNewProject({...newProject,name:e.target.value})} placeholder="项目名称"/><input value={newProject.brand} onChange={e=>setNewProject({...newProject,brand:e.target.value})} placeholder="品牌"/><input value={newProject.category} onChange={e=>setNewProject({...newProject,category:e.target.value})} placeholder="品类"/><button className="secondary" disabled={!newProject.name.trim()} onClick={createProject}>创建并选择</button></div>}
-          </>}
+        <div className="step-main"><div className="step-label"><span className="step-index">01</span><small>{projectPreselected ? '优先识别项目' : hasProjectContext ? '已选择项目' : '选择项目'}</small></div><h3>{projectPreselected ? '已为你选择最可能归属的项目，可点击切换' : hasProjectContext ? '新版本将归入你选择的项目' : '这份 PDP 属于哪个项目？'}</h3>
+          <div className="upload-project-picker" ref={projectPickerRef}>
+            <button type="button" className={`project-select${projectPreselected ? ' suggested-project' : ''}`} aria-haspopup="menu" aria-expanded={projectPickerOpen} onClick={() => setProjectPickerOpen(open => !open)}><span>{projectId === '__new__' ? '创建新项目' : selectedProject?.name || '请选择已有项目'}</span>{projectPickerOpen ? <CaretUp /> : <CaretDown />}</button>
+            {projectPickerOpen && <div className="project-menu upload-project-menu" role="menu" aria-label="选择项目"><ProjectMenuPanel projects={projects} selectedId={projectId} onSelect={requestProjectSelection} onCreate={requestProjectCreation} /></div>}
+          </div>
+          {projectId === '__new__' && <div className="new-project-form"><input value={newProject.name} onChange={e=>setNewProject({...newProject,name:e.target.value})} placeholder="项目名称"/><input value={newProject.brand} onChange={e=>setNewProject({...newProject,brand:e.target.value})} placeholder="品牌"/><input value={newProject.category} onChange={e=>setNewProject({...newProject,category:e.target.value})} placeholder="品类"/><button className="secondary" disabled={!newProject.name.trim()} onClick={createProject}>创建并选择</button></div>}
         </div>
         {projectId && projectId !== '__new__' && <CheckCircle className="step-done" weight="fill" />}
       </div>
@@ -738,6 +773,7 @@ function UploadPage({ projects, initialProjectId, diagnosisConfig, onProjectCrea
     </div>
     {error && <div className="upload-error"><WarningCircle weight="fill"/>{error}</div>}
     <div className="upload-footer"><button className="secondary" onClick={onCancel}>取消</button><button className="primary" disabled={!projectId || projectId === '__new__' || !file || uploading} onClick={submitUpload}>{uploading ? '上传中…' : '开始识别'} <ArrowRight /></button></div>
+    {pendingProjectChange && <div className="delete-confirm-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setPendingProjectChange(null); }}><section className="delete-confirm-modal project-change-confirm" role="alertdialog" aria-modal="true" aria-labelledby="project-change-title" aria-describedby="project-change-description"><div className="delete-confirm-icon"><WarningCircle weight="fill" /></div><div><small>确认项目归属</small><h2 id="project-change-title">新版本将归入另一个项目</h2><p id="project-change-description">{pendingProjectChange.type === 'select' ? `确认后，本次上传将从「${selectedProject?.name}」切换到「${pendingProjectChange.project.name}」。` : `确认后将创建新项目，本次上传不会归入「${selectedProject?.name}」。`}</p></div><div className="delete-confirm-actions"><button className="secondary" autoFocus onClick={() => setPendingProjectChange(null)}>取消</button><button className="primary" onClick={confirmProjectChange}>确认更改</button></div></section></div>}
     {failure && <FailureModal title={failure.title} message={failure.message} hint={failure.hint} onClose={() => setFailure(null)} />}
   </section>;
 }

@@ -36,9 +36,9 @@ final result: passed
 ### Interaction evidence
 
 - 首页入口继续显示“选择项目并上传 PDP 内容”和 `.upload-project-picker`；未选项目时上传控件保持禁用。
-- 工作台入口自动携带当前项目 ID，页面标题显示 `为「版本导入验收项目」上传新版本`。
-- 工作台入口渲染 `.locked-project`，显示“已识别项目 / 新版本将归入当前项目”，不渲染 `.upload-project-picker`。
-- 自动识别态的文件 input 为可用状态，开始识别按钮只等待文件，不再等待重复项目选择。
+- 工作台入口自动携带当前项目 ID，页面标题跟随当前预选项目。
+- 工作台入口显示“优先识别项目”，复用 `.upload-project-picker` 并保留下拉箭头、选中勾选、滚动、外部关闭与 Escape 关闭能力。
+- 自动预选态的文件 input 为可用状态；用户可切换已有项目，切换或新建前显示归属变更确认。
 - 取消工作台版本导入后返回“项目总览”，面包屑仍为同一项目。
 
 ### Runtime checks
@@ -48,7 +48,9 @@ final result: passed
 - Django diagnosis tests: 32/32 passed。
 - Playwright two-entry interaction regression: passed。
 - 本地开发数据库迁移 `0015_pdpsource_content_sha256`: applied。
-- 真实项目 `Nike Vomero 18｜缓震跑鞋详情页` 自动锁定验证: passed；浏览器 QA 未上传文件、未创建评分数据。
+- 真实项目 `Nike Vomero 18｜缓震跑鞋详情页` 默认预选、下拉展开与上传可用状态: passed。
+- 切换 `迪桑特 缓震流体跑鞋` 的归属确认、确认后标题/选择值联动: passed。
+- 取消上传返回原 Nike 项目总览: passed；浏览器 QA 未上传文件、未创建评分数据。
 
 final result: passed
 
