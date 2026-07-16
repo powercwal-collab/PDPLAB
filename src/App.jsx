@@ -52,12 +52,14 @@ function EvidenceThumbnail({ evidence, alt }) {
     if (evidence?.is_crop) return setPosition('50% 50%');
     const image = event.currentTarget;
     const bbox = evidence?.bbox || {};
+    const hasBbox = Number.isFinite(Number(bbox.x)) && Number.isFinite(Number(bbox.y));
     const scale = Math.min(1, 960 / Math.max(image.naturalWidth, 1), 8400 / Math.max(image.naturalHeight, 1));
     const scaledHeight = image.naturalHeight * scale;
     const sliceTop = Math.max(0, Number(evidence?.page_index || 0)) * 1400;
     const sliceHeight = Math.max(1, Math.min(1400, scaledHeight - sliceTop));
-    const centerX = Math.max(0, Math.min(1, Number(bbox.x || 0) + Number(bbox.width || 0) / 2));
-    const centerY = Math.max(0, Math.min(1, (sliceTop + (Number(bbox.y || 0) + Number(bbox.height || 0) / 2) * sliceHeight) / Math.max(scaledHeight, 1)));
+    const centerX = hasBbox ? Math.max(0, Math.min(1, Number(bbox.x) + Number(bbox.width || 0) / 2)) : 0.5;
+    const withinSliceY = hasBbox ? Number(bbox.y) + Number(bbox.height || 0) / 2 : 0.5;
+    const centerY = Math.max(0, Math.min(1, (sliceTop + withinSliceY * sliceHeight) / Math.max(scaledHeight, 1)));
     setPosition(`${centerX * 100}% ${centerY * 100}%`);
   };
   return <img src={evidence.image_url} alt={alt} onLoad={locateEvidence} style={{ objectPosition: position }} />;
@@ -66,7 +68,7 @@ function EvidenceThumbnail({ evidence, alt }) {
 function hasVisualEvidence(evidence) {
   if (!evidence?.image_url || evidence.evidence_type === 'missing_content') return false;
   if (evidence.is_crop) return true;
-  return Number.isFinite(Number(evidence?.bbox?.x)) && Number.isFinite(Number(evidence?.bbox?.y));
+  return Number.isFinite(Number(evidence?.page_index));
 }
 const taskBlueprints = {
   product_kv: { title:'重构首屏产品主张', owner:'内容 × 设计', assets:['商品主图','系列定位','核心卖点'] },

@@ -1,7 +1,9 @@
 import hashlib
+import io
 import time
 
 from celery import shared_task
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
@@ -9,6 +11,46 @@ from django.utils import timezone
 from .adapters import get_diagnosis_adapter
 from .models import DiagnosisJob, DiagnosisVersion, ModelRun, ModuleAssessment, PageEvidence, PdpSource, Project
 from .scoring import apply_evidence_guards, calculate_assessments
+
+
+def _evidence_crop(source, item):
+    """Create a real evidence image from the model's 1400px slice coordinates."""
+    if item.get("evidence_type") == "missing_content":
+        return None
+    try:
+        from PIL import Image
+
+        with source.file.open("rb") as source_file:
+            image = Image.open(source_file)
+            image.load()
+        if image.format not in {"JPEG", "PNG", "WEBP"}:
+            return None
+
+        width, height = image.size
+        model_scale = min(1, 960 / max(width, 1), 8400 / max(height, 1))
+        scaled_width = width * model_scale
+        scaled_height = height * model_scale
+        slice_top = max(0, int(item.get("page_index", 0))) * 1400
+        if slice_top >= scaled_height:
+            return None
+        slice_height = max(1, min(1400, scaled_height - slice_top))
+        bbox = item.get("bbox") or {}
+        has_bbox = all(key in bbox for key in ("x", "y"))
+        x = float(bbox.get("x", 0)) if has_bbox else 0
+        y = float(bbox.get("y", 0)) if has_bbox else 0
+        box_width = float(bbox.get("width", 1)) if has_bbox else 1
+        box_height = float(bbox.get("height", 1)) if has_bbox else 1
+
+        left = max(0, min(width - 1, round(x * scaled_width / model_scale)))
+        right = max(left + 1, min(width, round((x + box_width) * scaled_width / model_scale)))
+        top = max(0, min(height - 1, round((slice_top + y * slice_height) / model_scale)))
+        bottom = max(top + 1, min(height, round((slice_top + (y + box_height) * slice_height) / model_scale)))
+        crop = image.crop((left, top, right, bottom)).convert("RGB")
+        output = io.BytesIO()
+        crop.save(output, format="JPEG", quality=88, optimize=True)
+        return ContentFile(output.getvalue(), name=f"{item['module_code']}-{item.get('page_index', 0)}.jpg")
+    except (OSError, ValueError, TypeError):
+        return None
 
 
 def _update_job(job_id, *, status="processing", stage, progress):
@@ -128,7 +170,7 @@ def run_diagnosis_job(self, job_id):
             job.assessments.all().delete()
             evidence_by_module = {}
             for item in result.get("evidence", []):
-                evidence = PageEvidence.objects.create(
+                evidence = PageEvidence(
                     job=job,
                     module_code=item["module_code"],
                     page_index=item.get("page_index", 0),
@@ -138,6 +180,10 @@ def run_diagnosis_job(self, job_id):
                     model_reason=item.get("reason", ""),
                     confidence=item.get("confidence", 0),
                 )
+                crop = _evidence_crop(job.source, item)
+                if crop is not None:
+                    evidence.crop_image.save(crop.name, crop, save=False)
+                evidence.save()
                 evidence_by_module.setdefault(item["module_code"], []).append(evidence.id)
 
             snapshot_modules = []
