@@ -192,6 +192,7 @@
   .all-projects-page > header > button:last-child { width: 100%; justify-content: center; }
   .all-projects-toolbar { align-items: stretch; flex-direction: column; gap: 10px; margin-top: 24px; }
   .all-projects-toolbar label { width: 100%; }
+  .all-projects-count-actions { justify-content: space-between; }
   .all-projects-grid { grid-template-columns: 1fr; }
   .settings-page { min-height: 0; border-radius: 14px; }
   .settings-content { padding: 24px 18px; }

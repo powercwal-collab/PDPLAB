@@ -35,6 +35,9 @@ class EvidenceSuggestion(BaseModel):
         "related_product_recommendation", "series_recommendation", "outfit_recommendation", "certification",
         "award", "institutional_endorsement", "technology_source", "attributable_review", "brand_asset_proof",
         "page_structure", "dynamic_demo",
+        "designed_model_only", "designed_product_only", "designed_model_product_composite",
+        "pagewide_designed_model_product_sequence", "product_3d_structure_explanation",
+        "product_specific_art_illustration",
     ] = "missing_content"
     ocr_text: str = ""
     reason: str = Field(min_length=4, max_length=800)
@@ -48,7 +51,7 @@ class PdpDiagnosisOutput(BaseModel):
 
 class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
     provider = "openai"
-    prompt_version = "pdp-score-openai-v4-five-level"
+    prompt_version = "pdp-score-openai-v5-five-level-labels"
     # Keep vision payloads comfortably below OpenAI-compatible gateways' request
     # limits.  Long PDP images are represented as sequential slices rather than
     # one enormous data URL, which also gives the model stable page coordinates.
@@ -90,7 +93,7 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
         } for item in scoring_rules["modules"]]
         return (
             "你是电商 PDP 详情页诊断引擎。仅根据上传文件中可见的内容和用户上下文评估。"
-            "对每个模块必须返回且只返回一条结果：0=弱，0.25=较弱，0.5=中，0.75=较强，1=强。"
+            "对每个模块必须返回且只返回一条结果：0=弱，0.25=较弱，0.5=中，0.75=强，1=极强。"
             "不要计算总分或星级，服务端将用版本化评分规则计算。"
             "每个模块至少返回一条证据；若未观察到对应内容，必须返回一条 missing_content 证据并说明缺口。"
             "evidence_type 必须从以下枚举中选择，不得使用 page_region 或自造类型："
@@ -98,13 +101,17 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             "product_hero_visual、campaign_cover、real_use_scene、lifestyle_scene、sport_scene、movement_scene、styling_scene、product_proof、detail_view、"
             "basic_information、measurement_method、fit_advice、model_body_profile、tryon_feedback、series_comparison、service_policy、"
             "related_product_recommendation、series_recommendation、outfit_recommendation、certification、award、institutional_endorsement、"
-            "technology_source、attributable_review、brand_asset_proof、page_structure、dynamic_demo。"
+            "technology_source、attributable_review、brand_asset_proof、page_structure、dynamic_demo、designed_model_only、designed_product_only、designed_model_product_composite、pagewide_designed_model_product_sequence、product_3d_structure_explanation、product_specific_art_illustration。"
             "强制规则：标题、占位、通用/装饰素材、空壳、通用 icon 行或单独 Logo 不能证明模块存在，系数必须为0。"
             "产品相关文案/口号但缺少产品主导英雄视觉时标 hero_copy_only，最高0.25；有 product_hero_visual 或 campaign_cover 后再按结合质量判断。"
             "白灰底模特、孤立试穿、正背面图标 studio_model_view，若缺少真实场景与信息结合最高0.25；真实使用/运动/生活/穿搭场景才可继续升档。"
+            "视觉层级补充：特殊设计的非白底/灰底画面中，模特与产品在同一模块形成有意图的联合构图时标 designed_model_product_composite，可作为 T0 视觉依据；若只有模特或只有单产品，分别标 designed_model_only 或 designed_product_only，即使背景设计特殊也最高为 T1，不能单独支撑极强。"
+            "若整页通过连续模块把特殊非白底/灰底的模特画面与产品画面有逻辑地穿插编排，形成统一产品叙事、使用场景或品牌世界，标 pagewide_designed_model_product_sequence，也可作为相关模块的 T0 视觉依据；零散出现、无关联拼接或仅改变背景色不算。"
+            "若模块内包含与该产品直接对应的特殊设计图，例如 3D 结构图、完整结构剖析图或技术解释系统，标 product_3d_structure_explanation，可作为 T0 视觉依据；不要求必须与模特同画面，但装饰性 3D、背景特效或与产品无关的结构图不算。"
+            "若艺术手绘插图页明确围绕该产品表达结构、功能、使用场景、系列故事或品牌世界，标 product_specific_art_illustration，可作为 T0 视觉依据；通用装饰插画或与具体产品无关的艺术图不算。"
             "推荐模块的颜色、尺码、SKU 选项不是推荐；仅 related_product_recommendation、series_recommendation 或 outfit_recommendation 可计分。"
             "背书模块的单独 Logo 不可计分；必须有认证、机构、科技来源、可归因评价或品牌资产证明。"
-            "尺码模块若只有尺码表，最高只能为中；强需要测量方式、适配建议、模特/试穿或系列对比中的至少两类依据。"
+            "尺码模块若只有尺码表，最高只能为中；极强需要测量方式、适配建议、模特/试穿或系列对比中的至少两类依据。"
             "bbox 使用 0~1 归一化坐标，包含 x/y/width/height；无法定位时可为空对象。"
             "输出必须是单个 JSON 对象，顶层只允许 modules 与 evidence 两个数组，禁止用模块编码作为顶层键。"
             "modules 每项必须包含 module_code、coefficient、information_level、visual_tier、integration、judgment、confidence；"

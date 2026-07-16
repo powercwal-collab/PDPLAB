@@ -158,3 +158,47 @@
 .evidence-content-scroll::-webkit-scrollbar{width:6px}
 .evidence-content-scroll::-webkit-scrollbar-thumb{background:#c7d1df;border-radius:8px}
 .evidence-block.warning,.evidence-block.success{margin-top:16px;padding:16px}
+
+/* Stable score-column alignment and project-management controls. */
+.table-head>span:last-child{text-align:right}
+.module-score{justify-self:stretch;display:flex!important;align-items:baseline;justify-content:flex-end;gap:3px;color:#8d949f;font-variant-numeric:tabular-nums;text-align:right}
+.module-score b{color:#333b46;text-align:right}
+.module-score i{font-style:normal;text-align:center}
+.module-score em{font-style:normal;text-align:right}
+.all-projects-count-actions{display:flex;align-items:center;gap:12px}
+.all-projects-count-actions>button{height:32px;padding:0 13px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#56606d;font-size:10px;cursor:pointer}
+.all-projects-count-actions>button.active{border-color:var(--blue);background:#edf5ff;color:var(--blue)}
+.all-projects-count-actions>button.danger{display:inline-flex;align-items:center;gap:5px;border-color:#f1c7c5;background:#fff7f6;color:#d94f4c}
+.all-projects-count-actions>button.danger svg{width:13px;height:13px}
+.all-project-card{position:relative;min-width:0}
+.all-project-card>.project-open{width:100%;border:0;background:transparent;text-align:left;padding:0;cursor:pointer}
+.all-project-card>.project-open>strong,.all-project-card>.project-open>small,.all-project-card>.project-open>em{display:block;margin-left:4px}
+.all-project-card>.project-open>strong{font-size:14px;margin-top:12px}
+.all-project-card>.project-open>small{font-size:10px;color:#69727f;margin-top:5px}
+.all-project-card>.project-open>em{font-size:9px;color:#9aa2ad;margin-top:5px;font-style:normal}
+.all-project-card.managing>.project-open{cursor:default}
+.all-project-card.managing .project-cover{box-shadow:inset 0 0 0 2px #bcd9ff}
+.project-select-check{position:absolute;z-index:2;left:10px;top:10px;width:20px;height:20px;border:2px solid #fff;border-radius:6px;background:rgba(255,255,255,.88);box-shadow:0 1px 4px rgba(21,39,63,.18);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700}
+.project-select-check.selected{border-color:var(--blue);background:var(--blue)}
+.project-management-actions{display:flex;gap:7px;margin:10px 4px 0}
+.project-management-actions button{height:30px;border:1px solid var(--line);border-radius:6px;background:#fff;color:#56606d;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:5px;font-size:9px;cursor:pointer}
+.project-management-actions button svg{width:13px;height:13px}
+.project-management-actions button.danger{color:#d94f4c;border-color:#f1c7c5;background:#fff7f6}
+.project-manage-modal{width:min(440px,calc(100vw - 32px));border-radius:18px;background:#fff;padding:28px;box-shadow:0 24px 70px rgba(14,24,38,.24)}
+.project-manage-modal>small{font-size:10px;color:var(--blue);font-weight:700}
+.project-manage-modal h2{font-size:21px;margin:8px 0 18px}
+.project-manage-field{display:block;margin-top:12px}
+.project-manage-field>span{display:block;margin-bottom:6px;color:#687382;font-size:10px}
+.project-manage-field>input{width:100%;height:44px;border:1px solid var(--line);border-radius:8px;padding:0 12px;outline:none}
+.project-manage-field>input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(20,120,248,.1)}
+.project-manage-hint{margin:9px 0 0;color:#929ba7;font-size:9px}
+.project-manage-modal>div:last-child{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
+.project-manage-error{margin:10px 0 0;color:#d94f4c;font-size:10px}
+.module-carousel{position:relative;overflow:hidden;cursor:grab;touch-action:pan-y;user-select:none}
+.module-carousel.dragging{cursor:grabbing}
+.module-page{transition:transform .26s ease,opacity .26s ease;will-change:transform}
+.module-carousel.dragging .module-page{transition:none}
+.module-pagination{height:24px;display:flex;align-items:center;justify-content:center;gap:7px}
+.module-pagination button{width:6px;height:6px;padding:0;border:0;border-radius:50%;background:#d8e1ec;cursor:pointer;transition:width .2s ease,background .2s ease}
+.module-pagination button.active{width:18px;border-radius:999px;background:var(--blue)}
+@media(prefers-reduced-motion:reduce){.module-page,.module-pagination button{transition:none}}

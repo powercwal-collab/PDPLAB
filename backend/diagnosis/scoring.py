@@ -1,16 +1,16 @@
 DEFAULT_SCORING_RULES = {
-    "version": "pdp-v3",
+    "version": "pdp-v4",
     "source_skill": "pdp-detail-page-methodology",
     "source_mode": "versioned_runtime_rules",
-    "source_revision": "sha256:5608bdd07b424761fca91cc30ad9abf38366a7ed21c9dd3742641d2f8d8dda2e",
-    "skill_manifest_revision": "sha256:5608bdd07b424761fca91cc30ad9abf38366a7ed21c9dd3742641d2f8d8dda2e",
-    "coefficients": {"弱": 0, "较弱": 0.25, "中": 0.5, "较强": 0.75, "强": 1},
+    "source_revision": "sha256:92b47d71cadded88e95e9fabfa2ad430c11aced9ce13846304c7fc2ef7ee8ff1",
+    "skill_manifest_revision": "sha256:92b47d71cadded88e95e9fabfa2ad430c11aced9ce13846304c7fc2ef7ee8ff1",
+    "coefficients": {"弱": 0, "较弱": 0.25, "中": 0.5, "强": 0.75, "极强": 1},
     "maturity_definitions": {
         "弱": "无有效模块；标题、占位、通用模板、装饰素材或空壳不计入模块存在",
         "较弱": "有产品相关内容，但只有文案、单一信息、T2 视觉或棚拍/模特图，信息与视觉尚未形成有效结合",
         "中": "产品信息与 T2 级视觉形成基本结合，能够回答基础购买问题，但证据、吸引力或叙事仍不完整",
-        "较强": "完整匹配的信息内容与 T1 级视觉有效结合，层级清楚并能辅助购买决策",
-        "强": "完整可信的信息、证据与 T0 级视觉高度结合，形成品牌记忆、专业说服与标杆增长表达",
+        "强": "完整匹配的信息内容与 T1 级视觉有效结合，层级清楚并能辅助购买决策",
+        "极强": "完整可信的信息、证据与 T0 级视觉高度结合，形成品牌记忆、专业说服与标杆增长表达",
     },
     "judgment_order": ["有效存在性", "信息完整度", "T2/T1/T0 视觉层级", "信息与视觉匹配度", "消费者购买决策价值"],
     "modules": [
@@ -53,6 +53,8 @@ NON_QUALIFYING_EVIDENCE = {
     "generic_icon_row", "logo_only",
 }
 
+DESIGNED_SINGLE_SUBJECT_EVIDENCE = {"designed_model_only", "designed_product_only"}
+
 MODULE_EVIDENCE_GATES = {
     "product_kv": {"product_hero_visual", "campaign_cover"},
     "scenario": {"real_use_scene", "lifestyle_scene", "sport_scene", "movement_scene", "styling_scene"},
@@ -65,7 +67,7 @@ FIT_STRONG_EVIDENCE = {
 }
 
 
-MATURITY_BY_COEFFICIENT = {0: "弱", 0.25: "较弱", 0.5: "中", 0.75: "较强", 1: "强"}
+MATURITY_BY_COEFFICIENT = {0: "弱", 0.25: "较弱", 0.5: "中", 0.75: "强", 1: "极强"}
 VALID_COEFFICIENTS = set(MATURITY_BY_COEFFICIENT)
 
 
@@ -122,14 +124,21 @@ def apply_evidence_guards(adapter_modules, evidence, rules=None):
         information_level = suggestion.get("information_level", "")
         visual_tier = suggestion.get("visual_tier", "")
         integration = suggestion.get("integration", "")
+        types = set(evidence_by_module.get(code, []))
         if information_level in {"none", "shallow"} or integration == "isolated":
             cap(code, 0.25, "信息或视觉仍是单一证据，尚未形成图文结合，最高计为“较弱”。")
         elif visual_tier == "t2":
             cap(code, 0.5, "当前为 T2 基础表达，最高计为“中”。")
         elif visual_tier == "t1":
-            cap(code, 0.75, "当前为 T1 标准转化表达，最高计为“较强”；“强”需要 T0 标杆表达。")
+            cap(code, 0.75, "当前为 T1 标准转化表达，最高计为“强”；“极强”需要 T0 标杆表达。")
         elif visual_tier != "t0" and float(suggestion.get("coefficient", 0)) == 1:
-            cap(code, 0.75, "缺少可验证的 T0 视觉层级，不能计为“强”。")
+            cap(code, 0.75, "缺少可验证的 T0 视觉层级，不能计为“极强”。")
+        if (
+            visual_tier == "t0"
+            and types & DESIGNED_SINGLE_SUBJECT_EVIDENCE
+            and not types & {"designed_model_product_composite", "pagewide_designed_model_product_sequence"}
+        ):
+            cap(code, 0.75, "特殊非白底/灰底设计中仅有模特或仅有单产品，视觉最高按 T1 计为“强”；模特与产品需在同模块形成联合构图才可作为 T0 依据。")
 
     fit = suggestions.get("fit_comparison")
     if fit and float(fit.get("coefficient", 0)) >= 0.75:

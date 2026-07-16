@@ -160,6 +160,50 @@ def project_list(request):
     return JsonResponse({"error": "不支持的请求方式"}, status=405)
 
 
+def project_detail(request, project_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "请先登录"}, status=401)
+    try:
+        project = _accessible_projects(request).get(pk=project_id)
+    except Project.DoesNotExist:
+        return JsonResponse({"error": "项目不存在"}, status=404)
+    if request.method == "PATCH":
+        data = _payload(request)
+        name = data.get("name", "").strip()
+        category = data.get("category", "").strip()
+        update_fields = []
+        if name:
+            project.name = name
+            update_fields.append("name")
+        if category:
+            project.category = category
+            update_fields.append("category")
+        if update_fields:
+            project.save(update_fields=[*update_fields, "updated_at"])
+        project = Project.objects.prefetch_related("diagnoses", "sources").get(pk=project.pk)
+        return JsonResponse({"project": _serialize_project(project)})
+    if request.method == "DELETE":
+        project.delete()
+        return JsonResponse({"deleted": True, "project_id": project_id})
+    return JsonResponse({"error": "不支持的请求方式"}, status=405)
+
+
+def project_batch_delete(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "请先登录"}, status=401)
+    if request.method != "POST":
+        return JsonResponse({"error": "不支持的请求方式"}, status=405)
+    project_ids = _payload(request).get("project_ids", [])
+    if not isinstance(project_ids, list) or not project_ids:
+        return JsonResponse({"error": "请选择需要删除的项目"}, status=400)
+    normalized_ids = list(dict.fromkeys(project_ids))
+    projects = _accessible_projects(request).filter(pk__in=normalized_ids)
+    if projects.count() != len(normalized_ids):
+        return JsonResponse({"error": "部分项目不存在或无权删除"}, status=404)
+    projects.delete()
+    return JsonResponse({"deleted": True, "project_ids": normalized_ids})
+
+
 def _payload(request):
     try:
         return json.loads(request.body or "{}")
@@ -359,6 +403,17 @@ def upload_source(request):
 
 def _serialize_diagnosis(diagnosis):
     modules = [dict(module) for module in diagnosis.modules]
+    maturity_by_coefficient = {0: "弱", 0.25: "较弱", 0.5: "中", 0.75: "强", 1: "极强"}
+    legacy_maturity = {"较强": "强", "强": "极强"}
+    for module in modules:
+        try:
+            coefficient = float(module.get("coefficient"))
+        except (TypeError, ValueError):
+            coefficient = None
+        if coefficient in maturity_by_coefficient:
+            module["maturity"] = maturity_by_coefficient[coefficient]
+        elif module.get("maturity") in legacy_maturity:
+            module["maturity"] = legacy_maturity[module["maturity"]]
     try:
         source_job = diagnosis.source_job
     except DiagnosisJob.DoesNotExist:
@@ -436,7 +491,7 @@ def diagnosis_list(request):
     if any(not isinstance(module, dict) or not module.get("checked") for module in modules):
         return JsonResponse({"error": "请先确认全部评分模块"}, status=400)
 
-    maturity_coefficients = {"弱": 0, "较弱": 0.25, "中": 0.5, "较强": 0.75, "强": 1}
+    maturity_coefficients = {"弱": 0, "较弱": 0.25, "中": 0.5, "强": 0.75, "极强": 1}
     calculated_total = 0.0
     for module in modules:
         try:

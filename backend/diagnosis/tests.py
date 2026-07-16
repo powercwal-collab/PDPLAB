@@ -76,7 +76,7 @@ class DiagnosisApiTests(TestCase):
         response = self.client.get(reverse("diagnosis-config"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["source_skill"], "pdp-detail-page-methodology")
-        self.assertEqual(response.json()["scoring_standard_version"], "pdp-v3")
+        self.assertEqual(response.json()["scoring_standard_version"], "pdp-v4")
         self.assertIn(response.json()["ai_protocol"], {"responses", "chat_completions"})
         self.assertEqual(response.json()["confirmation_mode"], "ai_auto")
         self.assertIn(response.json()["active_adapter"], {"mock", "openai"})
@@ -112,9 +112,9 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(runtime["api_key"], "sk-private-test-value")
 
     def test_latest_builtin_rules_pass_remote_skill_contract_validation(self):
-        rules = ScoringStandard.objects.get(version="pdp-v3").rules
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
         _validate_remote_rules(rules)
-        self.assertEqual(rules["coefficients"], {"弱": 0, "较弱": 0.25, "中": 0.5, "较强": 0.75, "强": 1})
+        self.assertEqual(rules["coefficients"], {"弱": 0, "较弱": 0.25, "中": 0.5, "强": 0.75, "极强": 1})
         self.assertEqual(len(rules["star_bands"]), 13)
         self.assertTrue(all(module.get("strong_standard") for module in rules["modules"]))
 
@@ -173,6 +173,67 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(result["score_label"], "6.5 星")
         self.assertIn("/media/pdp_sources/", result["cover_url"])
         self.assertTrue(result["cover_url"].endswith(".png"))
+
+    def test_project_owner_can_rename_and_delete_project(self):
+        user = get_user_model().objects.create_user("project-manager", password="12345678")
+        self.client.force_login(user)
+        project = Project.objects.create(name="旧项目名", category="旧类型", owner=user)
+        renamed = self.client.patch(
+            reverse("project-detail", args=[project.id]),
+            data='{"name":"新项目名","category":"新类型"}',
+            content_type="application/json",
+        )
+        self.assertEqual(renamed.status_code, 200)
+        self.assertEqual(renamed.json()["project"]["name"], "新项目名")
+        self.assertEqual(renamed.json()["project"]["category"], "新类型")
+        unchanged = self.client.patch(
+            reverse("project-detail", args=[project.id]),
+            data='{"name":"","category":""}',
+            content_type="application/json",
+        )
+        self.assertEqual(unchanged.status_code, 200)
+        self.assertEqual(unchanged.json()["project"]["name"], "新项目名")
+        self.assertEqual(unchanged.json()["project"]["category"], "新类型")
+        deleted = self.client.delete(reverse("project-detail", args=[project.id]))
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(Project.objects.filter(pk=project.id).exists())
+
+    def test_project_management_is_limited_to_owner(self):
+        owner = get_user_model().objects.create_user("project-owner", password="12345678")
+        outsider = get_user_model().objects.create_user("project-outsider", password="12345678")
+        project = Project.objects.create(name="私有项目", owner=owner)
+        self.client.force_login(outsider)
+        rename = self.client.patch(
+            reverse("project-detail", args=[project.id]),
+            data='{"name":"越权修改"}',
+            content_type="application/json",
+        )
+        self.assertEqual(rename.status_code, 404)
+        self.assertEqual(self.client.delete(reverse("project-detail", args=[project.id])).status_code, 404)
+        self.assertTrue(Project.objects.filter(pk=project.id, name="私有项目").exists())
+
+    def test_project_owner_can_batch_delete_selected_projects(self):
+        user = get_user_model().objects.create_user("batch-project-manager", password="12345678")
+        other = get_user_model().objects.create_user("batch-project-other", password="12345678")
+        first = Project.objects.create(name="批量项目一", owner=user)
+        second = Project.objects.create(name="批量项目二", owner=user)
+        foreign = Project.objects.create(name="其他账号项目", owner=other)
+        self.client.force_login(user)
+        forbidden = self.client.post(
+            reverse("project-batch-delete"),
+            data=json.dumps({"project_ids": [first.id, foreign.id]}),
+            content_type="application/json",
+        )
+        self.assertEqual(forbidden.status_code, 404)
+        self.assertTrue(Project.objects.filter(pk=first.id).exists())
+        deleted = self.client.post(
+            reverse("project-batch-delete"),
+            data=json.dumps({"project_ids": [first.id, second.id]}),
+            content_type="application/json",
+        )
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(Project.objects.filter(pk__in=[first.id, second.id]).exists())
+        self.assertTrue(Project.objects.filter(pk=foreign.id).exists())
 
     def test_register_login_and_logout(self):
         register = self.client.post(
@@ -452,20 +513,20 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(map_overall_rating(90), 7)
 
     def test_five_level_coefficients_preserve_quarter_scores(self):
-        rules = ScoringStandard.objects.get(version="pdp-v3").rules
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
         coefficients = [0, 0.25, 0.5, 0.75, 1, 0, 0.25, 0.5, 0.75, 1, 0.25]
         suggestions = [
             {"module_code": definition["code"], "coefficient": coefficient, "judgment": "五级评分回归", "confidence": 0.9}
             for definition, coefficient in zip(rules["modules"], coefficients)
         ]
         modules, total, _stars = calculate_assessments(suggestions, rules)
-        self.assertEqual([item["maturity"] for item in modules[:5]], ["弱", "较弱", "中", "较强", "强"])
+        self.assertEqual([item["maturity"] for item in modules[:5]], ["弱", "较弱", "中", "强", "极强"])
         self.assertEqual(modules[9]["score"], 5)
         self.assertEqual(modules[10]["score"], 1.25)
         self.assertEqual(total, 44)
 
     def test_visual_tier_axes_apply_deterministic_score_ceilings(self):
-        rules = ScoringStandard.objects.get(version="pdp-v3").rules
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
         base = [{
             "module_code": item["code"], "coefficient": 1, "information_level": "proven",
             "visual_tier": "t0", "integration": "matched", "judgment": "完整", "confidence": 0.9,
@@ -489,7 +550,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(guarded["service"]["coefficient"], 0.25)
 
     def test_evidence_gates_override_formal_presence_without_qualifying_visuals(self):
-        rules = ScoringStandard.objects.get(version="pdp-v3").rules
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
         suggestions = [
             {"module_code": item["code"], "coefficient": 1, "information_level": "proven", "visual_tier": "t0", "integration": "matched", "judgment": "模型认为完整", "confidence": 0.9}
             for item in rules["modules"]
@@ -522,8 +583,33 @@ class DiagnosisApiTests(TestCase):
         self.assertLess(total, 100)
         self.assertLess(stars, 7)
 
+    def test_special_background_requires_model_product_composite_for_t0(self):
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
+        suggestions = [
+            {"module_code": item["code"], "coefficient": 1, "information_level": "proven", "visual_tier": "t0", "integration": "matched", "judgment": "完整", "confidence": 0.9}
+            for item in rules["modules"]
+        ]
+        evidence = [{"module_code": item["code"], "evidence_type": "product_proof"} for item in rules["modules"]]
+        evidence.extend([
+            {"module_code": "product_kv", "evidence_type": "product_hero_visual"},
+            {"module_code": "scenario", "evidence_type": "sport_scene"},
+            {"module_code": "recommendation", "evidence_type": "series_recommendation"},
+            {"module_code": "endorsement", "evidence_type": "technology_source"},
+            {"module_code": "fit_comparison", "evidence_type": "measurement_method"},
+            {"module_code": "fit_comparison", "evidence_type": "fit_advice"},
+            {"module_code": "detail_review", "evidence_type": "designed_product_only"},
+            {"module_code": "selling_point_proof", "evidence_type": "designed_model_product_composite"},
+            {"module_code": "basic_information", "evidence_type": "designed_product_only"},
+            {"module_code": "basic_information", "evidence_type": "pagewide_designed_model_product_sequence"},
+        ])
+
+        guarded = {item["module_code"]: item for item in apply_evidence_guards(suggestions, evidence, rules)}
+        self.assertEqual(guarded["detail_review"]["coefficient"], 0.75)
+        self.assertEqual(guarded["selling_point_proof"]["coefficient"], 1)
+        self.assertEqual(guarded["basic_information"]["coefficient"], 1)
+
     def test_evidence_gates_accept_qualifying_kv_scene_recommendation_and_backing(self):
-        rules = ScoringStandard.objects.get(version="pdp-v3").rules
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
         suggestions = [
             {"module_code": item["code"], "coefficient": 1, "information_level": "proven", "visual_tier": "t0", "integration": "matched", "judgment": "证据充分", "confidence": 0.9}
             for item in rules["modules"]
@@ -686,7 +772,7 @@ class DiagnosisApiTests(TestCase):
         self.assertFalse(fake_client.responses.kwargs["store"])
 
     def test_responses_adapter_uploads_pdf_using_binary_file_tuple(self):
-        rules = ScoringStandard.objects.get(version="pdp-v3").rules
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
         parsed = PdpDiagnosisOutput(
             modules=[ModuleSuggestion(module_code=item["code"], coefficient=0, information_level="none", visual_tier="none", integration="isolated", judgment="未发现有效内容", confidence=0.8) for item in rules["modules"]],
             evidence=[EvidenceSuggestion(module_code=item["code"], page_index=0, reason="未发现有效内容", confidence=0.8) for item in rules["modules"]],
@@ -719,7 +805,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(fake_files.kwargs["purpose"], "user_data")
 
     def test_openai_adapter_normalizes_missing_evidence_to_weak(self):
-        rules = ScoringStandard.objects.get(version="pdp-v3").rules
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
         missing_code = "interactive_content"
         parsed = PdpDiagnosisOutput(
             modules=[
@@ -811,7 +897,7 @@ class DiagnosisApiTests(TestCase):
             "model_name": "mimo-v2.5",
             "protocol": "chat_completions",
         })
-        rules = ScoringStandard.objects.get(version="pdp-v3").rules
+        rules = ScoringStandard.objects.get(version="pdp-v4").rules
         messages = adapter._chat_input_content(source, {"business_context": {}, "scoring_rules": rules})
         content = messages[1]["content"]
         self.assertEqual(len(content), 4)  # one instruction + three 1400px slices
