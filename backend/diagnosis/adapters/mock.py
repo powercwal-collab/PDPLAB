@@ -11,13 +11,13 @@ class MockDiagnosisAdapter(DiagnosisModelAdapter):
             "scenario": 0.5,
             "selling_point_proof": 0.5,
             "interactive_content": 0,
-            "detail_review": 1,
+            "detail_review": 0.75,
             "fit_comparison": 0.5,
-            "basic_information": 1,
+            "basic_information": 0.75,
             "service": 0.5,
             "recommendation": 0.5,
             "endorsement": 0.5,
-            "page_rhythm": 1,
+            "page_rhythm": 0.75,
         }
         judgments = {
             "product_kv": "有产品封面与基础主张，但首屏缺少更清晰的系列定位与利益点排序。",
@@ -52,6 +52,9 @@ class MockDiagnosisAdapter(DiagnosisModelAdapter):
             modules.append({
                 "module_code": code,
                 "coefficient": coefficients[code],
+                "information_level": "none" if coefficients[code] == 0 else "complete",
+                "visual_tier": "none" if coefficients[code] == 0 else ("t1" if coefficients[code] == 0.75 else "t2"),
+                "integration": "isolated" if coefficients[code] == 0 else "matched",
                 "judgment": judgments[code],
                 "confidence": 0.82 if coefficients[code] != 0 else 0.94,
             })

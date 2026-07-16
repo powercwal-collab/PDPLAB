@@ -43,7 +43,25 @@ const nav = [
 ];
 
 const gapColors = ['#5E7DF5', '#FFAD49', '#6CCE98'];
-const maturityOrder = { '弱': 0, '中': 1, '强': 2 };
+const maturityOrder = { '弱': 0, '较弱': 1, '中': 2, '较强': 3, '强': 4 };
+const maturityClass = maturity => ({ '弱':'weak', '较弱':'relatively-weak', '中':'medium', '较强':'relatively-strong', '强':'strong' }[maturity] || 'medium');
+
+function EvidenceThumbnail({ evidence, alt }) {
+  const [position, setPosition] = useState('50% 0%');
+  const locateEvidence = event => {
+    if (evidence?.is_crop) return setPosition('50% 50%');
+    const image = event.currentTarget;
+    const bbox = evidence?.bbox || {};
+    const scale = Math.min(1, 960 / Math.max(image.naturalWidth, 1), 8400 / Math.max(image.naturalHeight, 1));
+    const scaledHeight = image.naturalHeight * scale;
+    const sliceTop = Math.max(0, Number(evidence?.page_index || 0)) * 1400;
+    const sliceHeight = Math.max(1, Math.min(1400, scaledHeight - sliceTop));
+    const centerX = Math.max(0, Math.min(1, Number(bbox.x || 0) + Number(bbox.width || 0) / 2));
+    const centerY = Math.max(0, Math.min(1, (sliceTop + (Number(bbox.y || 0) + Number(bbox.height || 0) / 2) * sliceHeight) / Math.max(scaledHeight, 1)));
+    setPosition(`${centerX * 100}% ${centerY * 100}%`);
+  };
+  return <img src={evidence.image_url} alt={alt} onLoad={locateEvidence} style={{ objectPosition: position }} />;
+}
 const taskBlueprints = {
   product_kv: { title:'重构首屏产品主张', owner:'内容 × 设计', assets:['商品主图','系列定位','核心卖点'] },
   scenario: { title:'强化真实使用场景', owner:'摄影 × 设计', assets:['真实场景图','动作抓拍','用户利益说明'] },
@@ -60,7 +78,7 @@ const taskBlueprints = {
 
 function formatScore(value) {
   const numeric = Number(value || 0);
-  return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(1).replace(/\.0$/, '');
+  return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function userInitials(user) {
@@ -586,9 +604,9 @@ function Dashboard({ diagnosis, ruleModules, starBands, gapItems, taskItems, onR
     </section>
 
     <section className="panel maturity-panel">
-      <div className="panel-head"><div><small>11 模块评分</small><h2>模块成熟度分布</h2></div><div className="legend"><span className="strong">强 {maturityCounts['强'] || 0}</span><span className="medium">中 {maturityCounts['中'] || 0}</span><span className="weak">弱 {maturityCounts['弱'] || 0}</span></div></div>
+      <div className="panel-head"><div><small>11 模块评分</small><h2>模块成熟度分布</h2></div><div className="legend"><span className="strong">强 {maturityCounts['强'] || 0}</span><span className="relatively-strong">较强 {maturityCounts['较强'] || 0}</span><span className="medium">中 {maturityCounts['中'] || 0}</span><span className="relatively-weak">较弱 {maturityCounts['较弱'] || 0}</span><span className="weak">弱 {maturityCounts['弱'] || 0}</span></div></div>
       <div className="module-carousel" aria-label="模块成熟度分页" aria-roledescription="轮播">
-        <div className="module-table module-page" key={safeModulePage}><div className="table-head"><span>模块</span><span>成熟度</span><span>得分</span></div>{visibleModules.map(m=><div className="module-row" key={m.name}><span>{m.name}</span><span className={`maturity ${m.maturity==='强'?'strong':m.maturity==='弱'?'weak':'medium'}`}><StatusIcon maturity={m.maturity}/>{m.maturity}</span><span><b>{m.score}</b> / {m.max}</span></div>)}</div>
+        <div className="module-table module-page" key={safeModulePage}><div className="table-head"><span>模块</span><span>成熟度</span><span>得分</span></div>{visibleModules.map(m=><div className="module-row" key={m.name}><span>{m.name}</span><span className={`maturity ${maturityClass(m.maturity)}`}><StatusIcon maturity={m.maturity}/>{m.maturity}</span><span><b>{m.score}</b> / {m.max}</span></div>)}</div>
         {modulePageCount > 1 && <div className="module-pagination" role="group" aria-label="模块列表分页">{Array.from({ length: modulePageCount }, (_, index) => <button key={index} type="button" className={index === safeModulePage ? 'active' : ''} aria-label={`查看第 ${index + 1} 页模块`} aria-current={index === safeModulePage ? 'page' : undefined} onClick={() => setModulePage(index)} />)}</div>}
       </div>
     </section>
@@ -630,7 +648,7 @@ function HomePage({ projects, onViewAll, onOpenProject, onImport }) {
         <div><UploadSimple size={24}/><span><b>上传 PDP 内容</b><small>支持长图、截图、PDF 或网页导出文件</small></span></div>
         <span className="upload-action">选择文件 <ArrowRight /></span>
       </button>
-      <div className="home-tags"><span>11 模块评分</span><span>弱 / 中 / 强成熟度</span><span>评分版本可追溯</span><span className="unavailable">品牌资产匹配 · 暂未开放</span></div>
+      <div className="home-tags"><span>11 模块评分</span><span>弱 / 较弱 / 中 / 较强 / 强</span><span>评分版本可追溯</span><span className="unavailable">品牌资产匹配 · 暂未开放</span></div>
     </section>
     <section className="recent-projects">
       <div className="recent-head"><div><small>继续工作</small><h2>最近项目</h2></div><button onClick={onViewAll}>查看全部 <ArrowRight /></button></div>
@@ -805,20 +823,32 @@ function Diagnosis({ diagnosis, ruleModules, onReview }) {
   const [selectedName, setSelectedName] = useState(diagnosisModules[2].name);
   const selected = diagnosisModules.find(module => module.name === selectedName) || diagnosisModules[0];
   const totalScore = diagnosis?.total_score ?? diagnosisModules.reduce((sum,module) => sum + module.score, 0);
-  const primaryEvidence = selected.evidence?.[0];
-  const evidenceCount = selected.evidence?.length || 0;
+  const evidence = selected.evidence || [];
+  const primaryEvidence = evidence[0];
+  const evidenceCount = evidence.length;
+  const [previewEvidence, setPreviewEvidence] = useState(null);
+  useEffect(() => {
+    if (!previewEvidence) return undefined;
+    const closeOnEscape = event => { if (event.key === 'Escape') setPreviewEvidence(null); };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [previewEvidence]);
   const maturityLogic = selected.maturity === '强'
     ? '页面信息与视觉素材均能支持该模块的购买决策。'
     : selected.maturity === '弱'
       ? '页面未形成可识别的对应模块，消费者无法获得这类决策信息。'
-      : '页面已有对应内容，但信息或视觉素材至少一项仍未达到强标准。';
+      : selected.maturity === '较弱'
+        ? '页面存在产品相关内容，但仍以单一文案或视觉证据为主，图文尚未形成有效结合。'
+        : selected.maturity === '较强'
+          ? '完整信息已与 T1 级视觉形成匹配，具备标准转化能力；达到“强”仍需 T0 级表达。'
+          : '页面已有对应内容，信息与 T2 视觉形成基本结合，但证据、吸引力或叙事仍不完整。';
   const judgmentTitle = selected.judgment || `${selected.name}当前成熟度为“${selected.maturity}”`;
   const evidenceTitle = primaryEvidence?.model_reason || (evidenceCount ? '已定位对应页面证据' : '当前版本未保存可定位证据');
   const evidenceCopy = primaryEvidence?.ocr_text?.trim() || (evidenceCount ? '该证据未识别到可展示文字，请在复核页面结合原图区域查看。' : '请重新运行 AI 诊断或进入人工复核，为该模块补充页面证据。');
   const isStrong = selected.maturity === '强';
   const improvementTitle = isStrong ? `保持${selected.name}的强项表现` : selected.maturity === '弱' ? `先建立完整的${selected.name}模块` : `强化${selected.name}的信息与视觉证据`;
   const improvementCopy = `${selected.strong_standard || '围绕消费者购买问题补齐信息、证据与视觉表达。'}${isStrong ? ' 建议结合上线后的真实转化数据持续验证。' : ` 预计模块可从 ${selected.score} 分提升至 ${selected.max} 分。`}`;
-  return <div className="diagnosis-layout"><section className="panel module-browser"><div className="panel-head"><div><small>评分证据</small><h2>11 模块诊断</h2></div><span className="count-pill">总分 {totalScore}</span></div><div className="diagnosis-list">{diagnosisModules.map(m=><button key={m.name} className={selected.name===m.name?'selected':''} onClick={()=>setSelectedName(m.name)}><span>{m.name}</span><i className={m.maturity==='强'?'strong':m.maturity==='弱'?'weak':'medium'}>{m.maturity}</i><b>{m.score}/{m.max}</b><ArrowRight /></button>)}</div></section><section className="panel evidence-panel"><div className="evidence-top"><div><span className="priority p0">重点模块</span><h2>{selected.name}</h2></div><button className="primary" onClick={onReview}>复核并创建新评分版本 <ArrowRight/></button><div className="evidence-score"><strong>{selected.score}</strong><span>/ {selected.max} 分</span><i className={selected.maturity==='强'?'strong':selected.maturity==='弱'?'weak':'medium'}>{selected.maturity}</i></div></div><div className="evidence-block"><small>模块判断</small><h3>{judgmentTitle}</h3><p>{maturityLogic}</p></div><div className="evidence-block"><small>页面证据 · {evidenceCount} 条</small><h3>{evidenceTitle}</h3><p>{evidenceCopy}</p></div><div className={isStrong ? 'evidence-block success' : 'evidence-block warning'}><small>{isStrong ? '保持“强”需要' : '提升到“强”需要'}</small><h3>{improvementTitle}</h3><p>{improvementCopy}</p></div></section></div>;
+  return <><div className="diagnosis-layout"><section className="panel module-browser"><div className="panel-head"><div><small>评分证据</small><h2>11 模块诊断</h2></div><span className="count-pill">总分 {totalScore}</span></div><div className="diagnosis-list">{diagnosisModules.map(m=><button key={m.name} className={selected.name===m.name?'selected':''} onClick={()=>{setSelectedName(m.name);setPreviewEvidence(null);}}><span>{m.name}</span><i className={maturityClass(m.maturity)}>{m.maturity}</i><b>{m.score}/{m.max}</b><ArrowRight /></button>)}</div></section><section className="panel evidence-panel"><div className="evidence-top"><div className="evidence-heading"><span className="priority p0">重点模块</span><h2>{selected.name}</h2></div><button className="primary" onClick={onReview}>复核并创建新评分版本 <ArrowRight/></button><div className="evidence-score"><strong>{selected.score}</strong><span>/ {selected.max} 分</span><i className={maturityClass(selected.maturity)}>{selected.maturity}</i></div>{evidence.some(item=>item.image_url)&&<div className="diagnosis-evidence-list" aria-label="图片证据">{evidence.filter(item=>item.image_url).map((item,index)=><div className="diagnosis-evidence-item" key={`${item.image_url}-${index}`}><EvidenceThumbnail evidence={item} alt={`${selected.name}页面证据 ${index+1}`} /><span>图片证据 {index+1}</span><button type="button" onClick={()=>setPreviewEvidence({...item,index})}>查看</button></div>)}</div>}</div><div className="evidence-content-scroll"><div className="evidence-block"><small>模块判断</small><h3>{judgmentTitle}</h3><p>{maturityLogic}</p></div><div className="evidence-block"><small>页面证据 · {evidenceCount} 条</small><h3>{evidenceTitle}</h3><p>{evidenceCopy}</p></div><div className={isStrong ? 'evidence-block success' : 'evidence-block warning'}><small>{isStrong ? '保持“强”需要' : '提升到“强”需要'}</small><h3>{improvementTitle}</h3><p>{improvementCopy}</p></div></div></section></div>{previewEvidence&&<div className="evidence-lightbox-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setPreviewEvidence(null);}}><section className="evidence-lightbox" role="dialog" aria-modal="true" aria-labelledby="diagnosis-evidence-title"><header><div><small>页面证据 · {previewEvidence.index+1}/{evidenceCount}</small><h2 id="diagnosis-evidence-title">{selected.name}</h2></div><button type="button" aria-label="关闭图片证据" onClick={()=>setPreviewEvidence(null)}><X size={20}/></button></header><div className="evidence-lightbox-image"><img src={previewEvidence.source_image_url || previewEvidence.image_url} alt={`${selected.name}完整页面证据`} /></div><footer><div><small>证据说明</small><p>{previewEvidence.model_reason || previewEvidence.ocr_text || '当前证据未保存文字说明，请结合原图查看。'}</p></div><span>可上下滑动查看完整长图</span></footer></section></div>}</>;
 }
 
 function TaskRoute({query,setQuery,filter,setFilter,visibleTasks,tasks,currentScore,starBands,expanded,setExpanded}) {
@@ -830,14 +860,14 @@ function TaskRoute({query,setQuery,filter,setFilter,visibleTasks,tasks,currentSc
 
 function SettingsPage({ onSaved, diagnosisConfig, currentUser }) {
   const [tab, setTab] = useState('诊断规则');
-  const [settings, setSettings] = useState({ target:'T1 强', autoMatch:false, requireReview:true, weeklyDigest:false });
+  const [settings, setSettings] = useState({ target:'T1 较强', autoMatch:false, requireReview:true, weeklyDigest:false });
   const tabs=['诊断规则','品牌资产','集成服务','团队权限'];
   const ruleRevision = diagnosisConfig?.source_revision?.replace('sha256:', '').slice(0, 8);
   const ruleModules = diagnosisConfig?.scoring_rules?.modules || [];
   return <section className="settings-page">
     <aside><h2>系统设置</h2>{tabs.map(item=><button key={item} className={tab===item?'active':''} onClick={()=>setTab(item)}>{item}<CaretRight/></button>)}</aside>
     <div className="settings-content">
-      {tab==='诊断规则'&&<><div className="settings-head"><div><h2>诊断规则</h2><p>前端评分展示与后端当前启用的 PDP Skill 规则保持一致。</p></div><strong className="config-status ready">已同步</strong></div><div className="rule-source-card"><div><small>规则来源</small><b>{diagnosisConfig?.source_skill || 'pdp-detail-page-methodology'}</b><span>{diagnosisConfig?.source_mode === 'remote_http' ? '远程 Skill' : '内置版本化规则'} · {diagnosisConfig?.scoring_standard_version || 'pdp-v1'}{ruleRevision ? ` · ${ruleRevision}` : ''}</span></div><em>{ruleModules.length || 11} 模块 · 100 分</em></div><div className="rule-module-list">{ruleModules.map(module=><div key={module.code}><span>{module.name}</span><b>{module.weight} 分</b><small>{module.strong_standard}</small></div>)}</div><SettingSelect label="默认目标层级" value={settings.target} onChange={value=>setSettings({...settings,target:value})} options={['T1 强','T1-minus','T0 专业决策']}/><div className="setting-row"><div><b>AI 评分确认方式</b><span>11 模块与证据通过后自动锁定，人工可另建修订版本</span></div><strong className="config-status ready">自动锁定</strong></div><SettingToggle label="自动匹配品牌资产" description="暂未开放：后续接入品牌资产服务后启用" checked={settings.autoMatch} disabled onChange={value=>setSettings({...settings,autoMatch:value})}/><SettingToggle label="生成结果必须人工审核" description="保留为后续 AI 生成能力的审核规则" checked={settings.requireReview} disabled onChange={value=>setSettings({...settings,requireReview:value})}/></>}
+      {tab==='诊断规则'&&<><div className="settings-head"><div><h2>诊断规则</h2><p>前端评分展示与后端当前启用的 PDP Skill 规则保持一致。</p></div><strong className="config-status ready">已同步</strong></div><div className="rule-source-card"><div><small>规则来源</small><b>{diagnosisConfig?.source_skill || 'pdp-detail-page-methodology'}</b><span>{diagnosisConfig?.source_mode === 'remote_http' ? '远程 Skill' : '内置版本化规则'} · {diagnosisConfig?.scoring_standard_version || 'pdp-v3'}{ruleRevision ? ` · ${ruleRevision}` : ''}</span></div><em>{ruleModules.length || 11} 模块 · 100 分</em></div><div className="rule-module-list">{ruleModules.map(module=><div key={module.code}><span>{module.name}</span><b>{module.weight} 分</b><small>{module.strong_standard}</small></div>)}</div><SettingSelect label="默认目标层级" value={settings.target} onChange={value=>setSettings({...settings,target:value})} options={['T2 中','T1 较强','T0 强']}/><div className="setting-row"><div><b>AI 评分确认方式</b><span>11 模块与证据通过后自动锁定，人工可另建修订版本</span></div><strong className="config-status ready">自动锁定</strong></div><SettingToggle label="自动匹配品牌资产" description="暂未开放：后续接入品牌资产服务后启用" checked={settings.autoMatch} disabled onChange={value=>setSettings({...settings,autoMatch:value})}/><SettingToggle label="生成结果必须人工审核" description="保留为后续 AI 生成能力的审核规则" checked={settings.requireReview} disabled onChange={value=>setSettings({...settings,requireReview:value})}/></>}
       {tab==='品牌资产'&&<><div className="settings-head"><div><h2>品牌资产</h2><p>能力暂缓，保留未来接入企业 DAM 的配置位。</p></div></div><div className="integration-card unavailable-card"><ImageSquare/><div><b>PDP Lab 本地资产库</b><span>暂未开放</span></div><em>未启用</em></div><div className="integration-card unavailable-card"><FolderOpen/><div><b>企业 DAM</b><span>等待后续配置 API 地址和访问凭据</span></div><button disabled>暂未开放</button></div></>}
       {tab==='集成服务'&&<><div className="settings-head"><div><h2>集成服务</h2><p>AI 模型 API 与 PDP Skill 在管理后台拥有彼此独立的配置入口。</p></div></div><div className="integration-card"><Sparkle/><div><b>AI 页面理解</b><span>{diagnosisConfig?.active_adapter==='openai' ? `OpenAI 兼容接口 · ${diagnosisConfig.model_name} · ${diagnosisConfig.ai_protocol === 'chat_completions' ? 'Chat Completions' : 'Responses'}` : `当前为 Mock 安全阻断 · 待启用模型 ${diagnosisConfig?.configured_model_name || 'gpt-5.4-mini'}`} · {diagnosisConfig?.ai_config_source === 'admin' ? '后台独立配置' : '环境变量'}</span></div><em className={diagnosisConfig?.openai_configured?'config-status ready':'config-status'}>{diagnosisConfig?.openai_configured?'密钥已配置':'等待密钥'}</em></div><div className="integration-card"><ShieldCheck/><div><b>PDP 评分 Skill</b><span>{diagnosisConfig?.source_skill || 'pdp-detail-page-methodology'} · {diagnosisConfig?.skill_mode === 'remote_http' ? diagnosisConfig?.skill_endpoint_url : '内置版本化规则'}{ruleRevision ? ` · ${ruleRevision}` : ''} · {diagnosisConfig?.skill_config_source === 'admin' ? '后台独立配置' : '默认配置'}</span></div><em className="config-status ready">{diagnosisConfig?.scoring_standard_version || 'pdp-v1'}</em></div><div className="integration-card unavailable-card"><ImageSquare/><div><b>AI 图像生成</b><span>当前版本暂缓开放</span></div><em>未启用</em></div></>}
       {tab==='团队权限'&&<><div className="settings-head"><div><h2>团队权限</h2><p>控制项目成员与定期报告。</p></div></div><div className="member-row"><UserAvatar user={currentUser}/><div><b>{currentUser?.nickname || currentUser?.username || '用户'}</b><span>{currentUser?.email || '未设置邮箱'}</span></div><em>{userRoleLabel(currentUser)}</em></div><SettingToggle label="每周项目摘要" description="每周一向团队管理员发送项目进展摘要" checked={settings.weeklyDigest} onChange={value=>setSettings({...settings,weeklyDigest:value})}/></>}

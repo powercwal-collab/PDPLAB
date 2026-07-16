@@ -78,7 +78,7 @@ class UserProfile(models.Model):
 class DiagnosisVersion(models.Model):
     project = models.ForeignKey(Project, related_name="diagnoses", on_delete=models.CASCADE)
     version = models.PositiveIntegerField("评分版本", default=1)
-    total_score = models.DecimalField("总分", max_digits=5, decimal_places=1)
+    total_score = models.DecimalField("总分", max_digits=6, decimal_places=2)
     overall_rating = models.DecimalField("整体星级", max_digits=3, decimal_places=1)
     modules = models.JSONField("模块评分", default=list)
     source = models.ForeignKey(
@@ -183,8 +183,8 @@ class ModuleAssessment(models.Model):
     module_code = models.CharField("模块编码", max_length=64)
     module_name = models.CharField("模块名称", max_length=100)
     weight = models.DecimalField("权重", max_digits=5, decimal_places=1)
-    coefficient = models.DecimalField("评分系数", max_digits=2, decimal_places=1)
-    score = models.DecimalField("得分", max_digits=5, decimal_places=1)
+    coefficient = models.DecimalField("评分系数", max_digits=3, decimal_places=2)
+    score = models.DecimalField("得分", max_digits=6, decimal_places=2)
     maturity = models.CharField("成熟度", max_length=8)
     judgment = models.TextField("判断")
     confidence = models.DecimalField("置信度", max_digits=4, decimal_places=3, default=0)

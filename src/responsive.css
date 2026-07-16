@@ -44,8 +44,12 @@
   .dashboard-grid { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: auto; }
   .dashboard-grid > .panel { min-height: 390px; }
   .dashboard-grid > .score-panel,.dashboard-grid > .gap-panel { min-height: 405px; }
-  .diagnosis-layout,.review-layout,.rescore-grid { height: auto; grid-template-columns: 1fr; }
+  .diagnosis-layout,.main .review-layout,.rescore-grid { height: auto; grid-template-columns: 1fr; }
   .module-browser,.evidence-panel,.review-list,.review-evidence { height: auto; min-height: 0; }
+  .evidence-top { grid-template-columns: minmax(0,1fr) auto; }
+  .evidence-heading h2 { font-size: 19px; }
+  .diagnosis-evidence-list { max-height: 136px; margin-top: 10px; }
+  .evidence-top > .evidence-score { margin-top: 12px; }
   .route-hero,.rescore-hero,.final-head { align-items: flex-start; gap: 20px; flex-wrap: wrap; }
   .task-ledger { overflow-x: auto; }
   .ledger-toolbar { gap: 12px; flex-wrap: wrap; }
@@ -126,6 +130,12 @@
   .diagnosis-list { padding: 0 12px; }
   .diagnosis-list button { grid-template-columns: minmax(0,1fr) 42px 52px 16px; padding: 0 8px; }
   .evidence-panel { padding: 20px; }
+  .evidence-content-scroll { max-height: 520px; }
+  .evidence-top { grid-template-columns: 1fr; gap: 10px; }
+  .evidence-top > .primary { grid-row: 2; width: 100%; justify-content: center; }
+  .evidence-top > .evidence-score { grid-row: 3; margin-top: 2px; }
+  .diagnosis-evidence-list { grid-row: 4; max-height: 136px; margin-top: 0; }
+  .evidence-block { padding: 17px 0; }
   .route-page { gap: 14px; }
   .route-hero { padding: 22px 20px; }
   .route-score { width: 100%; justify-content: flex-start; padding: 0; }
@@ -158,8 +168,10 @@
   .workflow-actions button { flex: 1; justify-content: center; }
   .review-rows { padding: 0 12px; }
   .review-evidence { padding: 20px; }
-  .coefficient-picker { flex-wrap: wrap; }
-  .coefficient-picker > span { width: 100%; margin-bottom: 4px; }
+  .review-evidence .coefficient-picker { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); width: 100%; }
+  .review-evidence .coefficient-picker > span { grid-column: 1/-1; width: 100%; margin-bottom: 4px; }
+  .review-evidence .coefficient-picker button { width: 100%; }
+  .review-evidence .coefficient-picker button:last-child { grid-column: 1/-1; }
   .match-summary,.final-head,.rescore-hero { flex-direction: column; }
   .match-stats { width: 100%; }
   .matched-grid { grid-template-columns: 1fr; }

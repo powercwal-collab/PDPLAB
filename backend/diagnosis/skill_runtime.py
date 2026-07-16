@@ -16,8 +16,8 @@ def _validate_remote_rules(rules):
         raise RuntimeError("远程 PDP Skill 必须返回完整的 11 模块规则")
     if round(sum(float(item.get("weight", 0)) for item in modules), 3) != 100:
         raise RuntimeError("远程 PDP Skill 模块权重合计必须为 100")
-    if rules.get("coefficients") != {"弱": 0, "中": 0.5, "强": 1}:
-        raise RuntimeError("远程 PDP Skill 必须使用弱/中/强三档系数")
+    if rules.get("coefficients") != {"弱": 0, "较弱": 0.25, "中": 0.5, "较强": 0.75, "强": 1}:
+        raise RuntimeError("远程 PDP Skill 必须使用弱/较弱/中/较强/强五档系数")
     if not rules.get("star_bands"):
         raise RuntimeError("远程 PDP Skill 缺少整体星级分段")
 

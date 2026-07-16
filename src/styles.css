@@ -134,3 +134,27 @@
 .config-status{font-size:9px;font-style:normal;color:#9a6a20;background:#fff4df;border-radius:999px;padding:5px 8px;white-space:nowrap}.config-status.ready{color:#26945c;background:#eaf8f0}
 .settings-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.config-origin{font-size:10px;color:var(--muted);white-space:nowrap}.integration-card{grid-template-columns:34px minmax(0,1fr) auto}.integration-card>div{min-width:0}.integration-card span{overflow-wrap:anywhere}.rule-source-card{margin-top:18px;padding:15px 16px;border:1px solid #cfe1ff;border-radius:12px;background:#f6f9ff;display:flex;align-items:center;justify-content:space-between;gap:20px}.rule-source-card>div{display:flex;flex-direction:column;min-width:0}.rule-source-card small,.rule-source-card span{font-size:10px;color:var(--muted)}.rule-source-card b{font-size:13px;margin:4px 0}.rule-source-card em{font-size:10px;font-style:normal;color:var(--blue);font-weight:650;white-space:nowrap}.rule-module-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px;padding:8px 0 14px;border-bottom:1px solid var(--line)}.rule-module-list>div{min-height:54px;padding:8px 0;border-bottom:1px solid #eef2f7;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-content:center}.rule-module-list span{font-size:11px;font-weight:650}.rule-module-list b{font-size:10px;color:var(--blue)}.rule-module-list small{grid-column:1/-1;font-size:9px;line-height:1.45;color:var(--muted)}
 .failure-modal-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(22,30,42,.42);backdrop-filter:blur(3px);display:grid;place-items:center;padding:24px}.failure-modal{width:min(520px,100%);background:#fff;border-radius:18px;padding:28px;box-shadow:0 24px 70px rgba(20,29,42,.24);display:grid;grid-template-columns:48px 1fr;gap:16px}.failure-modal-icon{width:44px;height:44px;border-radius:13px;background:#fff0ed;color:#d9554d;display:grid;place-items:center}.failure-modal-icon svg{width:24px;height:24px}.failure-modal>div:nth-child(2){min-width:0}.failure-modal small{font-size:10px;color:#d9554d;font-weight:700}.failure-modal h2{font-size:21px;margin:6px 0 9px}.failure-modal p{font-size:12px;line-height:1.6;color:#4b5563;margin:0;overflow-wrap:anywhere}.failure-modal span{display:block;font-size:10px;line-height:1.55;color:#8a94a2;margin-top:10px}.failure-modal>.primary,.failure-modal-actions{grid-column:2}.failure-modal>.primary{justify-self:end;margin-top:8px}.failure-modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:8px}
+/* PDP v3 five-level maturity states. */
+.legend{gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.relatively-strong{color:#178c84!important;background:#e9f8f6!important}
+.relatively-weak{color:#dd713d!important;background:#fff2e9!important}
+
+/* Score diagnosis: keep the original content flow and tighten only the visual rhythm. */
+.evidence-panel{padding:24px;display:flex;flex-direction:column;overflow:hidden}
+.evidence-top{grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:0;padding-bottom:18px}
+.evidence-heading{min-width:0}
+.evidence-heading h2{font-size:21px;line-height:1.3;margin:9px 0 0;overflow-wrap:anywhere}
+.evidence-top>.primary{height:34px;align-self:start;padding:0 12px;white-space:nowrap}
+.evidence-top>.evidence-score{grid-column:1/-1;margin-top:14px}
+.evidence-score strong{font-size:46px;line-height:1}
+.diagnosis-evidence-list{grid-column:1/-1;max-height:148px;margin-top:12px;display:flex;flex-direction:column;gap:7px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c7d1df transparent}
+.diagnosis-evidence-item{height:64px;min-height:64px;padding:6px;border:1px solid #dfe6ef;border-radius:10px;background:#f7f9fb;display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:9px;align-items:center}
+.diagnosis-evidence-item img{width:52px;height:50px;display:block;border-radius:7px;object-fit:cover;object-position:center 24%;background:#eef2f6}
+.diagnosis-evidence-item span{min-width:0;font-size:10px;color:#647080;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.diagnosis-evidence-item button{height:28px;min-width:48px;padding:0 10px;border:1px solid #bcd4f6;border-radius:7px;background:#fff;color:var(--blue);font-size:9px;font-weight:650;cursor:pointer}
+.diagnosis-evidence-item button:hover{background:#eef6ff;border-color:var(--blue)}
+.evidence-block{padding:19px 0}
+.evidence-content-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c7d1df transparent}
+.evidence-content-scroll::-webkit-scrollbar{width:6px}
+.evidence-content-scroll::-webkit-scrollbar-thumb{background:#c7d1df;border-radius:8px}
+.evidence-block.warning,.evidence-block.success{margin-top:16px;padding:16px}

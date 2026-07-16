@@ -4,6 +4,8 @@ import {
   LockKey, MagicWand, ShieldCheck, Sparkle, Trash, TrendUp, WarningCircle, X
 } from '@phosphor-icons/react';
 import './workflow.css';
+
+const maturityClass = maturity => ({ '弱':'weak', '较弱':'relatively-weak', '中':'medium', '较强':'relatively-strong', '强':'strong' }[maturity] || 'medium');
 import { api } from './services/api.js';
 
 const reviewModules = [
@@ -102,7 +104,7 @@ export function ScoreReviewPage({ initialModules, starBands, onConfirm }) {
   const totalScore = moduleStates.reduce((sum, module) => sum + module.score, 0);
   const overallRating = mapOverallRating(totalScore, starBands);
   const updateCurrent = (change) => setModuleStates(previous => previous.map((module,index) => index === selected ? {...module,...change} : module));
-  const setMaturity = (maturity, coefficient) => updateCurrent({ maturity, coefficient, score: Math.round(current.max * coefficient * 10) / 10 });
+  const setMaturity = (maturity, coefficient) => updateCurrent({ maturity, coefficient, score: Math.round(current.max * coefficient * 100) / 100 });
   const toggleModuleChecked = index => setModuleStates(previous => previous.map((module,itemIndex) => itemIndex === index ? {...module,checked:!module.checked} : module));
   const submit = async () => {
     if (checkedCount !== moduleStates.length) return;
@@ -115,13 +117,13 @@ export function ScoreReviewPage({ initialModules, starBands, onConfirm }) {
     <section className="panel review-list">
       <div className="workflow-panel-head"><div><small>AI 初评 · 待确认</small><h2>检查 11 个模块</h2></div><span>{checkedCount}/11 已检查</span></div>
       <div className="review-batch"><span>总分 {totalScore} · {overallRating} 星</span><button onClick={() => setModuleStates(previous => previous.map(module => ({...module,checked:true})))}>确认全部 AI 初评</button></div>
-      <div className="review-rows">{moduleStates.map((module,index)=><button className={selected===index?'selected':''} key={module.name} onClick={()=>setSelected(index)}><i className={module.checked?'checked':''} onClick={event=>{event.stopPropagation();toggleModuleChecked(index)}}>{module.checked&&<Check />}</i><span>{module.name}</span><em className={module.maturity==='强'?'strong':module.maturity==='弱'?'weak':'medium'}>{module.maturity}</em><b>{module.score}/{module.max}</b></button>)}</div>
+      <div className="review-rows">{moduleStates.map((module,index)=><button className={selected===index?'selected':''} key={module.name} onClick={()=>setSelected(index)}><i className={module.checked?'checked':''} onClick={event=>{event.stopPropagation();toggleModuleChecked(index)}}>{module.checked&&<Check />}</i><span>{module.name}</span><em className={maturityClass(module.maturity)}>{module.maturity}</em><b>{module.score}/{module.max}</b></button>)}</div>
     </section>
     <section className="panel review-evidence">
-      <div className="review-evidence-head"><span>证据核对</span><h2>{current.name}</h2><div><strong>{current.score}</strong><small>/ {current.max} 分</small><em className={current.maturity==='强'?'strong':current.maturity==='弱'?'weak':'medium'}>{current.maturity}</em></div></div>
+      <div className="review-evidence-head"><span>证据核对</span><h2>{current.name}</h2><div><strong>{current.score}</strong><small>/ {current.max} 分</small><em className={maturityClass(current.maturity)}>{current.maturity}</em></div></div>
       <div className="evidence-preview"><img src={current.evidence?.[0]?.image_url || '/projects/nike-kids-learning-shoe.png'} alt="当前 PDP 页面证据"/><span>{current.evidence?.[0] ? `识别区域 · 第 ${current.evidence[0].page_index + 1} 段` : '识别区域 03 · 卖点表达'}</span></div>
       <div className="review-judgment"><small>AI 判断</small><h3>{current.judgment || '有对应内容，但证明方式不足'}</h3><p>{current.evidence?.[0]?.ocr_text || '产品功能有表达，但缺少结构示意、测试数据或场景验证，因此信息与视觉任一维度未达到“强”。'}</p></div>
-      <div className="coefficient-picker"><span>确认成熟度</span>{[['弱',0],['中',.5],['强',1]].map(([maturity,coefficient])=><button className={current.coefficient===coefficient?'active':''} key={maturity} onClick={() => setMaturity(maturity,coefficient)}>{maturity} · {coefficient}</button>)}</div>
+      <div className="coefficient-picker"><span>确认成熟度</span>{[['弱',0],['较弱',.25],['中',.5],['较强',.75],['强',1]].map(([maturity,coefficient])=><button className={current.coefficient===coefficient?'active':''} key={maturity} onClick={() => setMaturity(maturity,coefficient)}>{maturity} · {coefficient}</button>)}</div>
       <button className="mark-checked" onClick={()=>toggleModuleChecked(selected)}>{current.checked?<CheckCircle weight="fill"/>:<CheckCircle/>}{current.checked?'已检查此模块':'确认此模块证据'}</button>
       {error && <div className="review-error"><WarningCircle weight="fill"/>{error}</div>}
       <div className="workflow-actions review-confirm"><div><LockKey/><span>{checkedCount === 11 ? `将锁定 ${totalScore} 分、${overallRating} 星的评分版本。` : `还需检查 ${11 - checkedCount} 个模块，全部确认后才能锁定。`}</span></div><button className="primary" disabled={checkedCount !== 11 || saving} onClick={submit}>{saving ? '正在保存…' : '确认并锁定评分'} <ArrowRight /></button></div>
@@ -218,7 +220,7 @@ export function DiagnosisHistoryPage({ projectId, projectName, onDeleted, onSele
           return <div className="history-module-row" key={module.name}>
             <span>{module.name}</span>
             {evidence ? <button className="history-evidence-thumb" aria-label={`放大查看${module.name}证据切片`} onClick={() => setPreviewEvidence({ module, evidence, count:evidenceItems.length })}><img src={evidence.image_url} alt="" style={{objectPosition:evidenceObjectPosition(evidence)}}/>{evidenceItems.length > 1 && <i>+{evidenceItems.length - 1}</i>}</button> : <div className="history-evidence-empty" title="该版本未保存证据切片"><ImageSquare size={15}/><span>无切片</span></div>}
-            <em className={module.maturity==='强'?'strong':module.maturity==='弱'?'weak':'medium'}>{module.maturity}</em><span>{module.coefficient}</span><b>{module.score} / {module.max}</b>
+            <em className={maturityClass(module.maturity)}>{module.maturity}</em><span>{module.coefficient}</span><b>{module.score} / {module.max}</b>
           </div>;
         })}</div>
       </div>
@@ -254,7 +256,7 @@ export function GenerationPage({ assetIds, onComplete }) {
   return <section className="workflow-page generation-page">
     <div className="generation-icon"><Sparkle weight="fill"/></div><span className="workflow-kicker">AI 页面生成任务 · 草稿 v2</span><h2>{stage}</h2><p className="workflow-lead">基于已锁定评分、P0/P1 优化任务与 {assetIds.length} 项品牌资产生成新版 PDP。</p>
     <div className="generation-progress"><span style={{width:`${progress}%`}}/><b>{progress}%</b></div>
-    <div className="generation-brief"><div><small>目标层级</small><b>T1 强</b></div><div><small>预计总分</small><b>79 / 100</b></div><div><small>预计星级</small><b>5.5 星</b></div><div><small>输出模块</small><b>4 个页面段落</b></div></div>
+    <div className="generation-brief"><div><small>目标层级</small><b>T1 较强</b></div><div><small>预计总分</small><b>79 / 100</b></div><div><small>预计星级</small><b>5.5 星</b></div><div><small>输出模块</small><b>4 个页面段落</b></div></div>
     <div className="generation-checks"><span className={progress>=40?'done':''}><CheckCircle/>商品结构真实性</span><span className={progress>=60?'done':''}><CheckCircle/>品牌视觉一致性</span><span className={progress>=80?'done':''}><CheckCircle/>功能宣称检查</span><span className={progress>=100?'done':''}><CheckCircle/>页面结构与节奏</span></div>
     <div className="workflow-actions"><button className="primary" disabled={progress<100} onClick={onComplete}>查看最终优化页面 <ArrowRight /></button></div>
   </section>;
@@ -273,5 +275,5 @@ export function FinalPage({ onRescore, onBackTasks }) {
 
 export function RescorePage({ onFinish }) {
   const changes=[['沉浸式购物/场景化','中','强','9 → 18'],['卖点与功能证明','中','强','7 → 14'],['尺码/适配与对比选购','中','强','5 → 10'],['产品KV/封面故事','中','强','5 → 10']];
-  return <section className="rescore-page"><div className="rescore-hero"><div><span>复评结果 · v2</span><h2>页面进入成熟转化增强阶段</h2><p>四个关键模块由“中”提升到“强”，页面结构达到 T1 强标准。</p></div><div className="score-shift"><span><small>优化前</small><b>58</b><em>4.5 星</em></span><ArrowRight/><span className="after"><small>优化后</small><b>79</b><em>5.5 星</em></span></div></div><div className="rescore-grid"><section className="panel"><div className="workflow-panel-head"><div><small>模块变化</small><h2>本轮提升明细</h2></div></div>{changes.map(c=><div className="rescore-row" key={c[0]}><span>{c[0]}</span><em className="medium">{c[1]}</em><ArrowRight/><em className="strong">{c[2]}</em><b>{c[3]}</b></div>)}</section><section className="panel expected-value"><div className="workflow-panel-head"><div><small>上线验证</small><h2>建议关注指标</h2></div></div><div><span>首屏继续浏览率</span><b>验证快速决策信息</b></div><div><span>卖点模块停留</span><b>验证证明素材解释力</b></div><div><span>加购转化率</span><b>验证购买阻力降低</b></div><div><span>尺码咨询与退货</span><b>验证适配建议有效性</b></div></section></div><div className="workflow-actions"><button className="primary" onClick={onFinish}>完成本轮优化 <CheckCircle weight="fill"/></button></div></section>;
+  return <section className="rescore-page"><div className="rescore-hero"><div><span>复评结果 · v2</span><h2>页面进入成熟转化增强阶段</h2><p>四个关键模块由“中”提升到“较强”，页面结构达到 T1 较强标准。</p></div><div className="score-shift"><span><small>优化前</small><b>58</b><em>4.5 星</em></span><ArrowRight/><span className="after"><small>优化后</small><b>79</b><em>5.5 星</em></span></div></div><div className="rescore-grid"><section className="panel"><div className="workflow-panel-head"><div><small>模块变化</small><h2>本轮提升明细</h2></div></div>{changes.map(c=><div className="rescore-row" key={c[0]}><span>{c[0]}</span><em className="medium">{c[1]}</em><ArrowRight/><em className="strong">{c[2]}</em><b>{c[3]}</b></div>)}</section><section className="panel expected-value"><div className="workflow-panel-head"><div><small>上线验证</small><h2>建议关注指标</h2></div></div><div><span>首屏继续浏览率</span><b>验证快速决策信息</b></div><div><span>卖点模块停留</span><b>验证证明素材解释力</b></div><div><span>加购转化率</span><b>验证购买阻力降低</b></div><div><span>尺码咨询与退货</span><b>验证适配建议有效性</b></div></section></div><div className="workflow-actions"><button className="primary" onClick={onFinish}>完成本轮优化 <CheckCircle weight="fill"/></button></div></section>;
 }

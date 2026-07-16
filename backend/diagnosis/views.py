@@ -373,6 +373,7 @@ def _serialize_diagnosis(diagnosis):
                 "evidence_type": evidence.evidence_type,
                 "ocr_text": evidence.ocr_text,
                 "image_url": evidence.crop_image.url if evidence.crop_image else source_job.source.file.url,
+                "source_image_url": source_job.source.file.url,
                 "is_crop": bool(evidence.crop_image),
                 "model_reason": evidence.model_reason,
                 "confidence": float(evidence.confidence),
@@ -435,7 +436,7 @@ def diagnosis_list(request):
     if any(not isinstance(module, dict) or not module.get("checked") for module in modules):
         return JsonResponse({"error": "请先确认全部评分模块"}, status=400)
 
-    allowed_maturity = {"弱", "中", "强"}
+    maturity_coefficients = {"弱": 0, "较弱": 0.25, "中": 0.5, "较强": 0.75, "强": 1}
     calculated_total = 0.0
     for module in modules:
         try:
@@ -443,8 +444,11 @@ def diagnosis_list(request):
             maximum = float(module["max"])
         except (KeyError, TypeError, ValueError):
             return JsonResponse({"error": "模块得分格式不正确"}, status=400)
-        if module.get("maturity") not in allowed_maturity or maximum <= 0 or score < 0 or score > maximum:
+        maturity = module.get("maturity")
+        if maturity not in maturity_coefficients or maximum <= 0 or score < 0 or score > maximum:
             return JsonResponse({"error": "模块成熟度或得分超出范围"}, status=400)
+        if abs(score - maximum * maturity_coefficients[maturity]) > 0.01:
+            return JsonResponse({"error": "模块得分与五级成熟度系数不一致"}, status=400)
         calculated_total += score
 
     submitted_total = data.get("total_score")
@@ -537,6 +541,7 @@ def _serialize_job(job, include_result=False):
                 "evidence_type": evidence.evidence_type,
                 "ocr_text": evidence.ocr_text,
                 "image_url": evidence.crop_image.url if evidence.crop_image else job.source.file.url,
+                "source_image_url": job.source.file.url,
                 "is_crop": bool(evidence.crop_image),
                 "model_reason": evidence.model_reason,
                 "confidence": float(evidence.confidence),

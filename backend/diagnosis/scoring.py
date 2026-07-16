@@ -1,16 +1,18 @@
 DEFAULT_SCORING_RULES = {
-    "version": "pdp-v2",
+    "version": "pdp-v3",
     "source_skill": "pdp-detail-page-methodology",
     "source_mode": "versioned_runtime_rules",
-    "source_revision": "sha256:19843d4c2a4c2ae889e13d0245800336fe3adc145253314f5e277ddf5eb9e78c",
-    "skill_manifest_revision": "sha256:19843d4c2a4c2ae889e13d0245800336fe3adc145253314f5e277ddf5eb9e78c",
-    "coefficients": {"弱": 0, "中": 0.5, "强": 1},
+    "source_revision": "sha256:5608bdd07b424761fca91cc30ad9abf38366a7ed21c9dd3742641d2f8d8dda2e",
+    "skill_manifest_revision": "sha256:5608bdd07b424761fca91cc30ad9abf38366a7ed21c9dd3742641d2f8d8dda2e",
+    "coefficients": {"弱": 0, "较弱": 0.25, "中": 0.5, "较强": 0.75, "强": 1},
     "maturity_definitions": {
-        "弱": "无对应模块，用户无法在页面中获得该类购买决策信息",
-        "中": "有对应模块，但信息浅或视觉弱；设计信息与视觉素材任一维度不达标都会影响消费者继续理解",
-        "强": "有对应模块，且设计信息与视觉素材都围绕消费者需求展开，内容、证据、视觉表达与购买决策高度契合",
+        "弱": "无有效模块；标题、占位、通用模板、装饰素材或空壳不计入模块存在",
+        "较弱": "有产品相关内容，但只有文案、单一信息、T2 视觉或棚拍/模特图，信息与视觉尚未形成有效结合",
+        "中": "产品信息与 T2 级视觉形成基本结合，能够回答基础购买问题，但证据、吸引力或叙事仍不完整",
+        "较强": "完整匹配的信息内容与 T1 级视觉有效结合，层级清楚并能辅助购买决策",
+        "强": "完整可信的信息、证据与 T0 级视觉高度结合，形成品牌记忆、专业说服与标杆增长表达",
     },
-    "judgment_order": ["有效存在性", "模块强制归零条件", "设计信息与视觉素材质量", "T1/T0 视觉层级匹配", "消费者需求匹配"],
+    "judgment_order": ["有效存在性", "信息完整度", "T2/T1/T0 视觉层级", "信息与视觉匹配度", "消费者购买决策价值"],
     "modules": [
         {"code": "product_kv", "name": "产品KV/封面故事", "weight": 10, "strong_standard": "0.5-1屏内讲清产品主张、系列定位、核心卖点和主视觉"},
         {"code": "scenario", "name": "沉浸式购物/场景化", "weight": 18, "strong_standard": "场景覆盖真实使用、穿搭、运动状态和情绪代入"},
@@ -48,7 +50,7 @@ DEFAULT_SCORING_RULES = {
 # these guards apply only while a new job is being calculated.
 NON_QUALIFYING_EVIDENCE = {
     "missing_content", "generic_or_decorative", "empty_shell", "template_block",
-    "generic_icon_row", "hero_copy_only", "logo_only", "studio_model_view",
+    "generic_icon_row", "logo_only",
 }
 
 MODULE_EVIDENCE_GATES = {
@@ -61,6 +63,10 @@ MODULE_EVIDENCE_GATES = {
 FIT_STRONG_EVIDENCE = {
     "measurement_method", "fit_advice", "model_body_profile", "tryon_feedback", "series_comparison",
 }
+
+
+MATURITY_BY_COEFFICIENT = {0: "弱", 0.25: "较弱", 0.5: "中", 0.75: "较强", 1: "强"}
+VALID_COEFFICIENTS = set(MATURITY_BY_COEFFICIENT)
 
 
 def apply_evidence_guards(adapter_modules, evidence, rules=None):
@@ -82,6 +88,12 @@ def apply_evidence_guards(adapter_modules, evidence, rules=None):
             suggestion["coefficient"] = 0
             suggestion["judgment"] = f"{reason} 原模型判断：{suggestion.get('judgment', '')}"[:800]
 
+    def cap(code, maximum, reason):
+        suggestion = suggestions[code]
+        if float(suggestion.get("coefficient", 0)) > maximum:
+            suggestion["coefficient"] = maximum
+            suggestion["judgment"] = f"{reason} 原模型判断：{suggestion.get('judgment', '')}"[:800]
+
     for code, suggestion in suggestions.items():
         types = set(evidence_by_module.get(code, []))
         if types and types.issubset(NON_QUALIFYING_EVIDENCE):
@@ -96,10 +108,31 @@ def apply_evidence_guards(adapter_modules, evidence, rules=None):
                 "recommendation": "未发现基于系列、场景、穿搭或用户意图的真实关联推荐；仅颜色/SKU 选项不计入推荐。",
                 "endorsement": "未发现可归因的认证、机构、科技来源、口碑或品牌资产证据；单独 Logo 不计入背书。",
             }
-            force_zero(code, labels[code])
+            types = set(evidence_by_module.get(code, []))
+            if code == "product_kv" and "hero_copy_only" in types:
+                cap(code, 0.25, "存在产品相关文案但缺少产品主导英雄视觉，最高计为“较弱”。")
+            elif code == "scenario" and "studio_model_view" in types:
+                cap(code, 0.25, "存在棚拍/模特展示但缺少真实使用场景与利益绑定，最高计为“较弱”。")
+            else:
+                force_zero(code, labels[code])
+
+    # Visual polish alone cannot produce a mature score.  The adapter reports
+    # these axes, while the backend enforces deterministic ceilings.
+    for code, suggestion in suggestions.items():
+        information_level = suggestion.get("information_level", "")
+        visual_tier = suggestion.get("visual_tier", "")
+        integration = suggestion.get("integration", "")
+        if information_level in {"none", "shallow"} or integration == "isolated":
+            cap(code, 0.25, "信息或视觉仍是单一证据，尚未形成图文结合，最高计为“较弱”。")
+        elif visual_tier == "t2":
+            cap(code, 0.5, "当前为 T2 基础表达，最高计为“中”。")
+        elif visual_tier == "t1":
+            cap(code, 0.75, "当前为 T1 标准转化表达，最高计为“较强”；“强”需要 T0 标杆表达。")
+        elif visual_tier != "t0" and float(suggestion.get("coefficient", 0)) == 1:
+            cap(code, 0.75, "缺少可验证的 T0 视觉层级，不能计为“强”。")
 
     fit = suggestions.get("fit_comparison")
-    if fit and float(fit.get("coefficient", 0)) == 1:
+    if fit and float(fit.get("coefficient", 0)) >= 0.75:
         fit_types = set(evidence_by_module.get("fit_comparison", []))
         if len(fit_types & FIT_STRONG_EVIDENCE) < 2:
             fit["coefficient"] = 0.5
@@ -109,8 +142,8 @@ def apply_evidence_guards(adapter_modules, evidence, rules=None):
             )[:800]
 
     rhythm = suggestions.get("page_rhythm")
-    if rhythm and float(rhythm.get("coefficient", 0)) == 1:
-        if float(suggestions.get("product_kv", {}).get("coefficient", 0)) == 0 or float(suggestions.get("scenario", {}).get("coefficient", 0)) == 0:
+    if rhythm and float(rhythm.get("coefficient", 0)) >= 0.75:
+        if float(suggestions.get("product_kv", {}).get("coefficient", 0)) <= 0.25 or float(suggestions.get("scenario", {}).get("coefficient", 0)) <= 0.25:
             rhythm["coefficient"] = 0.5
             rhythm["judgment"] = (
                 "缺少有效 KV 或真实场景，页面尚未形成完整的“封面—沉浸—证明—决策—信任”叙事，结构节奏最高计为中。 原模型判断："
@@ -135,9 +168,9 @@ def calculate_assessments(adapter_modules, rules=None):
     for definition in active_rules["modules"]:
         suggestion = suggestions.get(definition["code"], {})
         coefficient = float(suggestion.get("coefficient", 0))
-        if coefficient not in {0, 0.5, 1}:
+        if coefficient not in VALID_COEFFICIENTS:
             raise ValueError(f"模块 {definition['code']} 返回了无效评分系数")
-        maturity = {0: "弱", 0.5: "中", 1: "强"}[coefficient]
+        maturity = MATURITY_BY_COEFFICIENT[coefficient]
         modules.append({
             "code": definition["code"],
             "name": definition["name"],
