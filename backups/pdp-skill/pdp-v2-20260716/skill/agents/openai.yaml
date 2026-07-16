@@ -1,0 +1,7 @@
+interface:
+  display_name: "PDP Detail Page Methodology"
+  short_description: "电商详情页评分诊断、成熟度与改版方法论"
+  default_prompt: "Use $pdp-detail-page-methodology to diagnose this ecommerce PDP and produce a score, maturity table, star-band logic, and prioritized redesign cases."
+
+policy:
+  allow_implicit_invocation: true

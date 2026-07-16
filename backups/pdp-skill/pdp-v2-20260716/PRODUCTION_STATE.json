@@ -1,0 +1,27 @@
+{
+  "captured_at": "2026-07-16T02:10:00+08:00",
+  "application_commit": "e4d7ccf6b2c5d53a614cdc295ba8b23d8095a3ce",
+  "application_tag": "pdp-lab-v3.18",
+  "production_release": "e4d7ccf6b2c5d53a614cdc295ba8b23d8095a3ce",
+  "scoring_standard": {
+    "version": "pdp-v2",
+    "name": "PDP 11 模块评分标准（证据强制校验）",
+    "is_active": true,
+    "source_skill": "pdp-detail-page-methodology",
+    "source_mode": "versioned_runtime_rules",
+    "source_revision": "sha256:19843d4c2a4c2ae889e13d0245800336fe3adc145253314f5e277ddf5eb9e78c",
+    "coefficients": {
+      "弱": 0,
+      "中": 0.5,
+      "强": 1
+    },
+    "module_count": 11,
+    "star_band_count": 13
+  },
+  "hard_gates": [
+    "全部模块必须先通过有效存在性门禁",
+    "产品KV只有文案或口号时系数必须为0",
+    "沉浸式场景只有白灰底模特或正背面图时系数必须为0",
+    "模型只能建议0、0.5、1，服务端门禁与版本化规则负责最终计分"
+  ]
+}
