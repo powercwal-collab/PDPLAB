@@ -36,12 +36,27 @@ function formatConfirmationMode(mode) {
   return '人工修订';
 }
 
-function evidenceObjectPosition(evidence) {
-  const bbox = evidence?.bbox;
-  if (!bbox || !Number.isFinite(Number(bbox.x)) || !Number.isFinite(Number(bbox.y))) return '50% 0%';
-  const centerX = Math.max(0, Math.min(1, Number(bbox.x) + Number(bbox.width || 0) / 2));
-  const centerY = Math.max(0, Math.min(1, Number(bbox.y) + Number(bbox.height || 0) / 2));
-  return `${centerX * 100}% ${centerY * 100}%`;
+function hasVisualEvidence(evidence) {
+  if (!evidence?.image_url || evidence.evidence_type === 'missing_content') return false;
+  if (evidence.is_crop) return true;
+  return Number.isFinite(Number(evidence?.bbox?.x)) && Number.isFinite(Number(evidence?.bbox?.y));
+}
+
+function HistoryEvidenceThumbnail({ evidence }) {
+  const [position, setPosition] = useState('50% 0%');
+  const locateEvidence = event => {
+    if (evidence?.is_crop) return setPosition('50% 50%');
+    const image = event.currentTarget;
+    const bbox = evidence?.bbox || {};
+    const scale = Math.min(1, 960 / Math.max(image.naturalWidth, 1), 8400 / Math.max(image.naturalHeight, 1));
+    const scaledHeight = image.naturalHeight * scale;
+    const sliceTop = Math.max(0, Number(evidence?.page_index || 0)) * 1400;
+    const sliceHeight = Math.max(1, Math.min(1400, scaledHeight - sliceTop));
+    const centerX = Math.max(0, Math.min(1, Number(bbox.x || 0) + Number(bbox.width || 0) / 2));
+    const centerY = Math.max(0, Math.min(1, (sliceTop + (Number(bbox.y || 0) + Number(bbox.height || 0) / 2) * sliceHeight) / Math.max(scaledHeight, 1)));
+    setPosition(`${centerX * 100}% ${centerY * 100}%`);
+  };
+  return <img src={evidence.image_url} alt="" onLoad={locateEvidence} style={{objectPosition:position}}/>;
 }
 
 export function AnalysisPage({ job, onComplete, onBack }) {
@@ -196,8 +211,15 @@ export function DiagnosisHistoryPage({ projectId, projectName, onDeleted, onSele
       container.scrollTop = 0;
       return;
     }
-    const y = Number(previewEvidence?.evidence?.bbox?.y || 0);
-    container.scrollTop = Math.max(0, y * event.currentTarget.scrollHeight - container.clientHeight * 0.16);
+    const image = event.currentTarget;
+    const evidence = previewEvidence?.evidence || {};
+    const bbox = evidence.bbox || {};
+    const scale = Math.min(1, 960 / Math.max(image.naturalWidth, 1), 8400 / Math.max(image.naturalHeight, 1));
+    const scaledHeight = image.naturalHeight * scale;
+    const sliceTop = Math.max(0, Number(evidence.page_index || 0)) * 1400;
+    const sliceHeight = Math.max(1, Math.min(1400, scaledHeight - sliceTop));
+    const focusRatio = Math.max(0, Math.min(1, (sliceTop + (Number(bbox.y || 0) + Number(bbox.height || 0) / 2) * sliceHeight) / Math.max(scaledHeight, 1)));
+    container.scrollTop = Math.max(0, focusRatio * image.scrollHeight - container.clientHeight * 0.16);
   };
   return <section className="diagnosis-history-page">
     <header><div><small>评价审计记录</small><h2>评分版本</h2><p>{projectName} 的每次锁定评分都会保留模块明细、操作者与时间。</p></div><ClockCounterClockwise size={30}/></header>
@@ -215,18 +237,18 @@ export function DiagnosisHistoryPage({ projectId, projectName, onDeleted, onSele
         <div className="history-summary"><span><small>锁定总分</small><strong>{selected.total_score}</strong></span><span><small>整体星级</small><strong>{selected.overall_rating} 星</strong></span><span><small>评分方式</small><strong>{formatConfirmationMode(selected.confirmation_mode)}</strong></span><span><small>状态</small><strong>已锁定</strong></span></div>
         <div className="history-module-head"><span>模块</span><span>证据切片</span><span>成熟度</span><span>系数</span><span>得分</span></div>
         <div className="history-module-list">{selected.modules.map(module => {
-          const evidenceItems = (module.evidence || []).filter(item => item?.image_url);
+          const evidenceItems = (module.evidence || []).filter(hasVisualEvidence);
           const evidence = evidenceItems[0];
           return <div className="history-module-row" key={module.name}>
             <span>{module.name}</span>
-            {evidence ? <button className="history-evidence-thumb" aria-label={`放大查看${module.name}证据切片`} onClick={() => setPreviewEvidence({ module, evidence, count:evidenceItems.length })}><img src={evidence.image_url} alt="" style={{objectPosition:evidenceObjectPosition(evidence)}}/>{evidenceItems.length > 1 && <i>+{evidenceItems.length - 1}</i>}</button> : <div className="history-evidence-empty" title="该版本未保存证据切片"><ImageSquare size={15}/><span>无切片</span></div>}
+            {evidence ? <button className="history-evidence-thumb" aria-label={`放大查看${module.name}证据切片`} onClick={() => setPreviewEvidence({ module, evidence, count:evidenceItems.length })}><HistoryEvidenceThumbnail evidence={evidence}/>{evidenceItems.length > 1 && <i>+{evidenceItems.length - 1}</i>}</button> : <div className="history-evidence-empty" title="该版本未保存可定位证据"><ImageSquare size={15}/><span>无切片</span></div>}
             <em className={maturityClass(module.maturity)}>{module.maturity}</em><span>{module.coefficient}</span><b>{module.score} / {module.max}</b>
           </div>;
         })}</div>
       </div>
     </div>}
     {deleteTarget && <div className="delete-confirm-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !deletingId) setDeleteTarget(null); }}><section className="delete-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-history-title" aria-describedby="delete-history-description"><div className="delete-confirm-icon"><Trash weight="fill" /></div><div><small>删除评分记录</small><h2 id="delete-history-title">确认删除评分版本 v{deleteTarget.version}？</h2><p id="delete-history-description">删除后将无法恢复该版本及其锁定分值；项目总览会自动切换到剩余的最新评分。</p>{deleteError && <div className="delete-confirm-error"><WarningCircle weight="fill" />{deleteError}</div>}</div><div className="delete-confirm-actions"><button className="secondary" autoFocus disabled={Boolean(deletingId)} onClick={() => setDeleteTarget(null)}>取消</button><button className="danger" disabled={Boolean(deletingId)} onClick={confirmDelete}>{deletingId ? '正在删除…' : '确认删除'}</button></div></section></div>}
-    {previewEvidence && <div className="evidence-lightbox-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setPreviewEvidence(null); }}><section className="evidence-lightbox" role="dialog" aria-modal="true" aria-labelledby="evidence-lightbox-title"><header><div><small>模块证据切片 · 第 {Number(previewEvidence.evidence.page_index || 0) + 1} 段</small><h2 id="evidence-lightbox-title">{previewEvidence.module.name}</h2></div><button aria-label="关闭证据切片预览" onClick={() => setPreviewEvidence(null)}><X size={19}/></button></header><div className="evidence-lightbox-image" ref={evidenceImageContainerRef}><img src={previewEvidence.evidence.image_url} alt={`${previewEvidence.module.name}证据切片`} onLoad={positionEvidencePreview}/></div><footer><div><small>识别内容</small><p>{previewEvidence.evidence.ocr_text || previewEvidence.evidence.model_reason || '该模块已保存页面视觉证据。'}</p></div>{previewEvidence.count > 1 && <span>该模块共 {previewEvidence.count} 条证据，本次展示第 1 条</span>}</footer></section></div>}
+    {previewEvidence && <div className="evidence-lightbox-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setPreviewEvidence(null); }}><section className="evidence-lightbox" role="dialog" aria-modal="true" aria-labelledby="evidence-lightbox-title"><header><div><small>模块证据切片 · 第 {Number(previewEvidence.evidence.page_index || 0) + 1} 段</small><h2 id="evidence-lightbox-title">{previewEvidence.module.name}</h2></div><button aria-label="关闭证据切片预览" onClick={() => setPreviewEvidence(null)}><X size={19}/></button></header><div className="evidence-lightbox-image" ref={evidenceImageContainerRef}><img src={previewEvidence.evidence.source_image_url || previewEvidence.evidence.image_url} alt={`${previewEvidence.module.name}完整页面证据`} onLoad={positionEvidencePreview}/></div><footer><div><small>识别内容</small><p>{previewEvidence.evidence.ocr_text || previewEvidence.evidence.model_reason || '该模块已保存页面视觉证据。'}</p></div>{previewEvidence.count > 1 && <span>该模块共 {previewEvidence.count} 条证据，本次展示第 1 条</span>}</footer></section></div>}
   </section>;
 }
 
