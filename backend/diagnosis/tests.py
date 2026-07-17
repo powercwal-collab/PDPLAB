@@ -171,8 +171,35 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(result["latest_score"], 87)
         self.assertEqual(result["overall_rating"], 6.5)
         self.assertEqual(result["score_label"], "6.5 星")
-        self.assertIn("/media/pdp_sources/", result["cover_url"])
-        self.assertTrue(result["cover_url"].endswith(".png"))
+        self.assertEqual(result["cover_url"], reverse("project-cover", args=[project.id]))
+
+    def test_project_cover_endpoint_returns_mobile_safe_thumbnail(self):
+        user = get_user_model().objects.create_user("cover-user", password="12345678")
+        self.client.force_login(user)
+        project = Project.objects.create(name="超长 PDP", owner=user)
+        source_image = Image.new("RGB", (750, 15000), color=(46, 124, 232))
+        image_bytes = BytesIO()
+        source_image.save(image_bytes, format="JPEG")
+        PdpSource.objects.create(
+            project=project,
+            original_name="long-pdp.jpg",
+            file=SimpleUploadedFile("long-pdp.jpg", image_bytes.getvalue(), content_type="image/jpeg"),
+        )
+
+        response = self.client.get(reverse("project-cover", args=[project.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/jpeg")
+        thumbnail = Image.open(BytesIO(b"".join(response.streaming_content)))
+        self.assertEqual(thumbnail.size, (960, 540))
+
+    def test_project_cover_is_private_to_project_owner(self):
+        owner = get_user_model().objects.create_user("cover-owner", password="12345678")
+        outsider = get_user_model().objects.create_user("cover-outsider", password="12345678")
+        project = Project.objects.create(name="私有封面", owner=owner)
+        self.client.force_login(outsider)
+        response = self.client.get(reverse("project-cover", args=[project.id]))
+        self.assertEqual(response.status_code, 404)
 
     def test_project_owner_can_rename_and_delete_project(self):
         user = get_user_model().objects.create_user("project-manager", password="12345678")

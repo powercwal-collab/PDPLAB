@@ -8,6 +8,7 @@ urlpatterns = [
     path("diagnosis-config/", views.diagnosis_config, name="diagnosis-config"),
     path("projects/", views.project_list, name="project-list"),
     path("projects/batch-delete/", views.project_batch_delete, name="project-batch-delete"),
+    path("projects/<int:project_id>/cover/", views.project_cover, name="project-cover"),
     path("projects/<int:project_id>/", views.project_detail, name="project-detail"),
     path("auth/login/", views.login_view, name="auth-login"),
     path("auth/register/", views.register_view, name="auth-register"),

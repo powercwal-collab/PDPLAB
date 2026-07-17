@@ -2168,7 +2168,7 @@ function HomePage({ projects, onViewAll, onOpenProject, onImport }) {
             >
               <div className="project-cover">
                 {project.image ? (
-                  <img src={project.image} alt="" />
+                  <img src={project.image} alt="" loading="lazy" decoding="async" />
                 ) : (
                   <FolderOpen size={38} />
                 )}
@@ -2289,7 +2289,7 @@ function AllProjectsPage({
                 )}
                 <div className="project-cover">
                   {project.image ? (
-                    <img src={project.image} alt="" />
+                    <img src={project.image} alt="" loading="lazy" decoding="async" />
                   ) : (
                     <FolderOpen size={42} />
                   )}

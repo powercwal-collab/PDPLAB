@@ -1,17 +1,21 @@
 import json
+from io import BytesIO
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.core.validators import validate_email
 from django.db import connection
 from django.db import transaction
 from django.db.models import Max
-from django.http import JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import (
     DiagnosisJob,
@@ -111,7 +115,11 @@ def _normalized_diagnosis_rating(diagnosis):
     return float(map_overall_rating(diagnosis.total_score, rules))
 
 
-def _serialize_project(project):
+PROJECT_COVER_SIZE = (960, 540)
+PROJECT_COVER_VERSION = "v1"
+
+
+def _project_cover_source(project):
     diagnoses = list(project.diagnoses.all())
     sources = list(project.sources.all())
     latest_diagnosis = diagnoses[0] if diagnoses else None
@@ -119,9 +127,43 @@ def _serialize_project(project):
     if latest_diagnosis and latest_diagnosis.source_id:
         cover_source = next((source for source in sources if source.id == latest_diagnosis.source_id), None)
     cover_source = cover_source or (sources[0] if sources else None)
+    return latest_diagnosis, cover_source
+
+
+def _project_cover_cache_name(project, source):
+    return f"project_covers/{project.id}/{source.id}-{PROJECT_COVER_VERSION}.jpg"
+
+
+def _ensure_project_cover(project, source):
+    cache_name = _project_cover_cache_name(project, source)
+    if default_storage.exists(cache_name):
+        return cache_name
+
+    with source.file.open("rb") as source_file, Image.open(source_file) as image:
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        width, height = image.size
+        target_ratio = PROJECT_COVER_SIZE[0] / PROJECT_COVER_SIZE[1]
+        source_ratio = width / height
+        if source_ratio > target_ratio:
+            crop_width = max(1, round(height * target_ratio))
+            left = max(0, (width - crop_width) // 2)
+            crop_box = (left, 0, left + crop_width, height)
+        else:
+            crop_height = max(1, round(width / target_ratio))
+            # PDP 长图以首屏为封面，禁止从纵向中部截取。
+            crop_box = (0, 0, width, min(height, crop_height))
+        cover = image.crop(crop_box).resize(PROJECT_COVER_SIZE, Image.Resampling.LANCZOS)
+        output = BytesIO()
+        cover.save(output, format="JPEG", quality=86, optimize=True, progressive=True)
+    default_storage.save(cache_name, ContentFile(output.getvalue()))
+    return cache_name
+
+
+def _serialize_project(project):
+    latest_diagnosis, cover_source = _project_cover_source(project)
     cover_url = ""
     if cover_source and cover_source.original_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-        cover_url = cover_source.file.url
+        cover_url = reverse("project-cover", args=[project.id])
     normalized_rating = _normalized_diagnosis_rating(latest_diagnosis)
     activity_dates = [project.updated_at]
     if latest_diagnosis:
@@ -141,6 +183,28 @@ def _serialize_project(project):
         "cover_url": cover_url,
         "source_name": cover_source.original_name if cover_source else "",
     }
+
+
+def project_cover(request, project_id):
+    if not request.user.is_authenticated:
+        return HttpResponse(status=401)
+    if request.method != "GET":
+        return HttpResponse(status=405)
+    try:
+        project = _accessible_projects(request).prefetch_related("diagnoses", "sources").get(pk=project_id)
+    except Project.DoesNotExist:
+        return HttpResponse(status=404)
+    _, source = _project_cover_source(project)
+    if not source or not source.original_name.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+        return HttpResponse(status=404)
+    try:
+        cover_name = _ensure_project_cover(project, source)
+        response = FileResponse(default_storage.open(cover_name, "rb"), content_type="image/jpeg")
+    except (FileNotFoundError, OSError, UnidentifiedImageError, ValueError):
+        return HttpResponse(status=404)
+    response["Cache-Control"] = "private, max-age=86400"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def project_list(request):
