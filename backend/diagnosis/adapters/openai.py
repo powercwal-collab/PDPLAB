@@ -51,7 +51,7 @@ class PdpDiagnosisOutput(BaseModel):
 
 class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
     provider = "openai"
-    prompt_version = "pdp-score-openai-v5-five-level-labels"
+    prompt_version = "pdp-score-openai-v6-latest-skill"
     # Keep vision payloads comfortably below OpenAI-compatible gateways' request
     # limits.  Long PDP images are represented as sequential slices rather than
     # one enormous data URL, which also gives the model stable page coordinates.

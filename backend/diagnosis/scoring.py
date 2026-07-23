@@ -1,9 +1,9 @@
 DEFAULT_SCORING_RULES = {
-    "version": "pdp-v4",
+    "version": "pdp-v5",
     "source_skill": "pdp-detail-page-methodology",
     "source_mode": "versioned_runtime_rules",
-    "source_revision": "sha256:92b47d71cadded88e95e9fabfa2ad430c11aced9ce13846304c7fc2ef7ee8ff1",
-    "skill_manifest_revision": "sha256:92b47d71cadded88e95e9fabfa2ad430c11aced9ce13846304c7fc2ef7ee8ff1",
+    "source_revision": "sha256:88b13f5890ee520c162a90c30eee59c3c5ff55b7336b38eb4e5a92d0ce1e8a7d",
+    "skill_manifest_revision": "sha256:88b13f5890ee520c162a90c30eee59c3c5ff55b7336b38eb4e5a92d0ce1e8a7d",
     "coefficients": {"弱": 0, "较弱": 0.25, "中": 0.5, "强": 0.75, "极强": 1},
     "maturity_definitions": {
         "弱": "无有效模块；标题、占位、通用模板、装饰素材或空壳不计入模块存在",
@@ -13,6 +13,18 @@ DEFAULT_SCORING_RULES = {
         "极强": "完整可信的信息、证据与 T0 级视觉高度结合，形成品牌记忆、专业说服与标杆增长表达",
     },
     "judgment_order": ["有效存在性", "信息完整度", "T2/T1/T0 视觉层级", "信息与视觉匹配度", "消费者购买决策价值"],
+    "visual_tier_rules": {
+        "t2_max_coefficient": 0.5,
+        "t1_max_coefficient": 0.75,
+        "t0_requires_complete_matched_evidence": True,
+        "t0_eligible_evidence": [
+            "designed_model_product_composite",
+            "pagewide_designed_model_product_sequence",
+            "product_3d_structure_explanation",
+            "product_specific_art_illustration",
+        ],
+        "t1_only_evidence": ["designed_model_only", "designed_product_only"],
+    },
     "modules": [
         {"code": "product_kv", "name": "产品KV/封面故事", "weight": 10, "strong_standard": "0.5-1屏内讲清产品主张、系列定位、核心卖点和主视觉"},
         {"code": "scenario", "name": "沉浸式购物/场景化", "weight": 18, "strong_standard": "场景覆盖真实使用、穿搭、运动状态和情绪代入"},

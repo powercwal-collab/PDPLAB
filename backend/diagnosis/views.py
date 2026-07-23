@@ -91,6 +91,7 @@ def diagnosis_config(request):
             "coefficients": rules.get("coefficients", DEFAULT_SCORING_RULES["coefficients"]),
             "maturity_definitions": rules.get("maturity_definitions", DEFAULT_SCORING_RULES["maturity_definitions"]),
             "judgment_order": rules.get("judgment_order", DEFAULT_SCORING_RULES["judgment_order"]),
+            "visual_tier_rules": rules.get("visual_tier_rules", DEFAULT_SCORING_RULES["visual_tier_rules"]),
             "modules": rules.get("modules", DEFAULT_SCORING_RULES["modules"]),
             "star_bands": rules.get("star_bands", DEFAULT_SCORING_RULES["star_bands"]),
         },
