@@ -76,7 +76,8 @@ class DiagnosisApiTests(TestCase):
         response = self.client.get(reverse("diagnosis-config"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["source_skill"], "pdp-detail-page-methodology")
-        self.assertEqual(response.json()["scoring_standard_version"], "pdp-v5")
+        self.assertEqual(response.json()["scoring_standard_version"], "pdp-v6")
+        self.assertEqual(response.json()["source_spec_version"], "PDP Scoring Spec v4.2.0 (2026-07-24)")
         self.assertIn(response.json()["ai_protocol"], {"responses", "chat_completions"})
         self.assertEqual(response.json()["confirmation_mode"], "ai_auto")
         self.assertIn(response.json()["active_adapter"], {"mock", "openai"})
@@ -112,11 +113,16 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(runtime["api_key"], "sk-private-test-value")
 
     def test_latest_builtin_rules_pass_remote_skill_contract_validation(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         _validate_remote_rules(rules)
         self.assertEqual(rules["coefficients"], {"弱": 0, "较弱": 0.25, "中": 0.5, "强": 0.75, "极强": 1})
         self.assertEqual(len(rules["star_bands"]), 13)
         self.assertTrue(all(module.get("strong_standard") for module in rules["modules"]))
+        self.assertEqual(set(rules["boundary_locks"]), {"scenario", "fit_comparison", "service"})
+        self.assertEqual(rules["regression_cases"]["france_jersey_static_long_capture"]["total_score"], 70.25)
+        rollback_rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        self.assertEqual(rollback_rules["version"], "pdp-v5")
+        self.assertNotIn("boundary_locks", rollback_rules)
 
     def test_admin_exposes_independent_ai_and_skill_setting_entries(self):
         admin_user = get_user_model().objects.create_superuser("settings-admin", password="12345678")
@@ -540,7 +546,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(map_overall_rating(90), 7)
 
     def test_five_level_coefficients_preserve_quarter_scores(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         coefficients = [0, 0.25, 0.5, 0.75, 1, 0, 0.25, 0.5, 0.75, 1, 0.25]
         suggestions = [
             {"module_code": definition["code"], "coefficient": coefficient, "judgment": "五级评分回归", "confidence": 0.9}
@@ -553,7 +559,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(total, 44)
 
     def test_visual_tier_axes_apply_deterministic_score_ceilings(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         base = [{
             "module_code": item["code"], "coefficient": 1, "information_level": "proven",
             "visual_tier": "t0", "integration": "matched", "judgment": "完整", "confidence": 0.9,
@@ -570,6 +576,7 @@ class DiagnosisApiTests(TestCase):
             {"module_code": "endorsement", "evidence_type": "technology_source"},
             {"module_code": "fit_comparison", "evidence_type": "measurement_method"},
             {"module_code": "fit_comparison", "evidence_type": "fit_advice"},
+            {"module_code": "service", "evidence_type": "product_specific_care"},
         ])
         guarded = {item["module_code"]: item for item in apply_evidence_guards(base, evidence, rules)}
         self.assertEqual(guarded["selling_point_proof"]["coefficient"], 0.5)
@@ -577,7 +584,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(guarded["service"]["coefficient"], 0.25)
 
     def test_evidence_gates_override_formal_presence_without_qualifying_visuals(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         suggestions = [
             {"module_code": item["code"], "coefficient": 1, "information_level": "proven", "visual_tier": "t0", "integration": "matched", "judgment": "模型认为完整", "confidence": 0.9}
             for item in rules["modules"]
@@ -611,7 +618,7 @@ class DiagnosisApiTests(TestCase):
         self.assertLess(stars, 7)
 
     def test_special_background_requires_model_product_composite_for_t0(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         suggestions = [
             {"module_code": item["code"], "coefficient": 1, "information_level": "proven", "visual_tier": "t0", "integration": "matched", "judgment": "完整", "confidence": 0.9}
             for item in rules["modules"]
@@ -636,7 +643,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(guarded["basic_information"]["coefficient"], 1)
 
     def test_latest_skill_t0_special_design_evidence_remains_eligible(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         suggestions = [
             {
                 "module_code": item["code"],
@@ -675,7 +682,7 @@ class DiagnosisApiTests(TestCase):
         )
 
     def test_evidence_gates_accept_qualifying_kv_scene_recommendation_and_backing(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         suggestions = [
             {"module_code": item["code"], "coefficient": 1, "information_level": "proven", "visual_tier": "t0", "integration": "matched", "judgment": "证据充分", "confidence": 0.9}
             for item in rules["modules"]
@@ -689,12 +696,122 @@ class DiagnosisApiTests(TestCase):
         for item in rules["modules"]:
             evidence.append({"module_code": item["code"], "evidence_type": types.get(item["code"], "product_proof")})
         evidence.append({"module_code": "fit_comparison", "evidence_type": "fit_advice"})
+        evidence.extend([
+            {"module_code": "scenario", "evidence_type": "lifestyle_scene"},
+            {"module_code": "scenario", "evidence_type": "scene_benefit_link"},
+            {"module_code": "fit_comparison", "evidence_type": "size_chart"},
+            {"module_code": "fit_comparison", "evidence_type": "series_comparison"},
+            {"module_code": "fit_comparison", "evidence_type": "body_type_guidance"},
+            {"module_code": "fit_comparison", "evidence_type": "fit_visualization"},
+        ])
         guarded = {item["module_code"]: item for item in apply_evidence_guards(suggestions, evidence, rules)}
         self.assertEqual(guarded["product_kv"]["coefficient"], 1)
         self.assertEqual(guarded["scenario"]["coefficient"], 1)
         self.assertEqual(guarded["recommendation"]["coefficient"], 1)
         self.assertEqual(guarded["endorsement"]["coefficient"], 1)
         self.assertEqual(guarded["fit_comparison"]["coefficient"], 1)
+
+    def test_unified_scenario_caps_campaign_without_scene_benefit_proof(self):
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
+        suggestions = [{
+            "module_code": "scenario",
+            "coefficient": 1,
+            "information_level": "proven",
+            "visual_tier": "t0",
+            "integration": "matched",
+            "judgment": "品牌大片完整",
+            "confidence": 0.9,
+        }]
+        evidence = [
+            {"module_code": "scenario", "evidence_type": "sport_scene"},
+            {"module_code": "scenario", "evidence_type": "lifestyle_scene"},
+        ]
+        guarded = apply_evidence_guards(suggestions, evidence, rules)[0]
+        self.assertEqual(guarded["coefficient"], 0.75)
+        self.assertIn("场景—产品利益证明", guarded["judgment"])
+
+    def test_unified_fit_version_model_and_chart_reaches_strong_not_extreme(self):
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
+        suggestions = [{
+            "module_code": "fit_comparison",
+            "coefficient": 1,
+            "information_level": "proven",
+            "visual_tier": "t0",
+            "integration": "matched",
+            "judgment": "尺码体系完整",
+            "confidence": 0.9,
+        }]
+        evidence = [
+            {"module_code": "fit_comparison", "evidence_type": "size_chart"},
+            {"module_code": "fit_comparison", "evidence_type": "model_body_profile"},
+            {"module_code": "fit_comparison", "evidence_type": "series_comparison"},
+        ]
+        guarded = apply_evidence_guards(suggestions, evidence, rules)[0]
+        self.assertEqual(guarded["coefficient"], 0.75)
+        self.assertIn("个性化/身型指导", guarded["judgment"])
+
+    def test_unified_service_rejects_generic_and_caps_limited_specific_content(self):
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
+        suggestion = [{
+            "module_code": "service",
+            "coefficient": 0.75,
+            "information_level": "complete",
+            "visual_tier": "t1",
+            "integration": "matched",
+            "judgment": "服务信息完整",
+            "confidence": 0.9,
+        }]
+        generic = apply_evidence_guards(
+            suggestion,
+            [{"module_code": "service", "evidence_type": "generic_platform_service"}],
+            rules,
+        )[0]
+        self.assertEqual(generic["coefficient"], 0)
+
+        mixed = apply_evidence_guards(
+            suggestion,
+            [
+                {"module_code": "service", "evidence_type": "generic_platform_service"},
+                {"module_code": "service", "evidence_type": "product_specific_care"},
+                {"module_code": "service", "evidence_type": "product_specific_return_boundary"},
+            ],
+            rules,
+        )[0]
+        self.assertEqual(mixed["coefficient"], 0.5)
+
+    def test_france_jersey_regression_is_canonical_70_25_and_five_stars(self):
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
+        regression = rules["regression_cases"]["france_jersey_static_long_capture"]
+        suggestions = [{
+            "module_code": definition["code"],
+            "coefficient": regression["coefficients"][definition["code"]],
+            "information_level": "proven",
+            "visual_tier": "t0",
+            "integration": "matched",
+            "judgment": "法国队球衣冻结证据回归",
+            "confidence": 0.9,
+        } for definition in rules["modules"]]
+        by_code = {item["module_code"]: item for item in suggestions}
+        by_code["scenario"]["coefficient"] = 1
+        by_code["service"]["coefficient"] = 0.5
+        evidence = [{"module_code": item["code"], "evidence_type": "product_proof"} for item in rules["modules"]]
+        evidence.extend([
+            {"module_code": "product_kv", "evidence_type": "product_hero_visual"},
+            {"module_code": "scenario", "evidence_type": "sport_scene"},
+            {"module_code": "scenario", "evidence_type": "lifestyle_scene"},
+            {"module_code": "fit_comparison", "evidence_type": "size_chart"},
+            {"module_code": "fit_comparison", "evidence_type": "model_body_profile"},
+            {"module_code": "fit_comparison", "evidence_type": "series_comparison"},
+            {"module_code": "service", "evidence_type": "generic_platform_service"},
+            {"module_code": "service", "evidence_type": "product_specific_care"},
+            {"module_code": "recommendation", "evidence_type": "series_recommendation"},
+            {"module_code": "endorsement", "evidence_type": "technology_source"},
+        ])
+        guarded = apply_evidence_guards(suggestions, evidence, rules)
+        modules, total, stars = calculate_assessments(guarded, rules)
+        self.assertEqual({item["code"]: item["coefficient"] for item in modules}, regression["coefficients"])
+        self.assertEqual(total, 70.25)
+        self.assertEqual(stars, 5)
 
     def test_async_job_worker_creates_evidence_and_auto_locked_version(self):
         user = get_user_model().objects.create_user("auto-reviewer", password="12345678")
@@ -838,7 +955,7 @@ class DiagnosisApiTests(TestCase):
         self.assertFalse(fake_client.responses.kwargs["store"])
 
     def test_responses_adapter_uploads_pdf_using_binary_file_tuple(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         parsed = PdpDiagnosisOutput(
             modules=[ModuleSuggestion(module_code=item["code"], coefficient=0, information_level="none", visual_tier="none", integration="isolated", judgment="未发现有效内容", confidence=0.8) for item in rules["modules"]],
             evidence=[EvidenceSuggestion(module_code=item["code"], page_index=0, reason="未发现有效内容", confidence=0.8) for item in rules["modules"]],
@@ -871,7 +988,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(fake_files.kwargs["purpose"], "user_data")
 
     def test_openai_adapter_normalizes_missing_evidence_to_weak(self):
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         missing_code = "interactive_content"
         parsed = PdpDiagnosisOutput(
             modules=[
@@ -982,7 +1099,7 @@ class DiagnosisApiTests(TestCase):
             "model_name": "mimo-v2.5",
             "protocol": "chat_completions",
         })
-        rules = ScoringStandard.objects.get(version="pdp-v5").rules
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
         messages = adapter._chat_input_content(source, {"business_context": {}, "scoring_rules": rules})
         content = messages[1]["content"]
         self.assertEqual(len(content), 4)  # one instruction + three 1400px slices

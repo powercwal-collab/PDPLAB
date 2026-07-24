@@ -2,7 +2,7 @@ from django.db import migrations
 
 
 def install_pdp_v5_rules(apps, schema_editor):
-    from diagnosis.scoring import DEFAULT_SCORING_RULES
+    from diagnosis.scoring_standards.pdp_v5 import PDP_V5_RULES
 
     ScoringStandard = apps.get_model("diagnosis", "ScoringStandard")
     ScoringStandard.objects.filter(is_active=True).update(is_active=False)
@@ -10,7 +10,7 @@ def install_pdp_v5_rules(apps, schema_editor):
         version="pdp-v5",
         defaults={
             "name": "PDP 11 模块最新版 Skill 评分标准",
-            "rules": DEFAULT_SCORING_RULES,
+            "rules": PDP_V5_RULES,
             "is_active": True,
         },
     )
