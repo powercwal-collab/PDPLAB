@@ -24,9 +24,14 @@ from .models import (
 )
 from .adapters.openai import EvidenceSuggestion, ModuleSuggestion, OpenAIDiagnosisAdapter, PdpDiagnosisOutput
 from .runtime_config import get_runtime_integration_config
-from .scoring import apply_evidence_guards, calculate_assessments, map_overall_rating
+from .scoring import (
+    apply_evidence_guards,
+    apply_regression_case_lock,
+    calculate_assessments,
+    map_overall_rating,
+)
 from .skill_runtime import _validate_remote_rules
-from .tasks import _public_error, run_diagnosis_job
+from .tasks import _public_error, _source_visual_fingerprint, run_diagnosis_job
 
 
 def valid_png_bytes(width=1, height=1):
@@ -94,7 +99,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["source_skill"], "pdp-detail-page-methodology")
         self.assertEqual(response.json()["scoring_standard_version"], "pdp-v6")
-        self.assertEqual(response.json()["source_spec_version"], "PDP Scoring Spec v4.2.0 (2026-07-24)")
+        self.assertEqual(response.json()["source_spec_version"], "PDP Scoring Spec v4.2.1 (2026-07-24)")
         self.assertIn(response.json()["ai_protocol"], {"responses", "chat_completions"})
         self.assertEqual(response.json()["confirmation_mode"], "ai_auto")
         self.assertIn(response.json()["active_adapter"], {"mock", "openai"})
@@ -137,6 +142,15 @@ class DiagnosisApiTests(TestCase):
         self.assertTrue(all(module.get("strong_standard") for module in rules["modules"]))
         self.assertEqual(set(rules["boundary_locks"]), {"scenario", "fit_comparison", "service"})
         self.assertEqual(rules["regression_cases"]["france_jersey_static_long_capture"]["total_score"], 70.25)
+        self.assertEqual(
+            rules["runtime_consistency"],
+            {
+                "long_image_policy": "width_only_resize_full_height_slices",
+                "distinct_evidence_rows": True,
+                "score_precision_decimals": 2,
+                "regression_fingerprint": "normalized_rgb_64_with_original_dimensions",
+            },
+        )
         rollback_rules = ScoringStandard.objects.get(version="pdp-v5").rules
         self.assertEqual(rollback_rules["version"], "pdp-v5")
         self.assertNotIn("boundary_locks", rollback_rules)
@@ -830,6 +844,45 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(total, 70.25)
         self.assertEqual(stars, 5)
 
+    def test_france_jersey_online_vector_is_reconciled_to_frozen_regression(self):
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
+        regression = rules["regression_cases"]["france_jersey_static_long_capture"]
+        online_coefficients = {
+            "product_kv": 1,
+            "scenario": 0.75,
+            "selling_point_proof": 0.75,
+            "interactive_content": 0,
+            "detail_review": 0.75,
+            "fit_comparison": 0.25,
+            "basic_information": 0.5,
+            "service": 0,
+            "recommendation": 0.5,
+            "endorsement": 0.5,
+            "page_rhythm": 0.75,
+        }
+        suggestions = [{
+            "module_code": definition["code"],
+            "coefficient": online_coefficients[definition["code"]],
+            "information_level": "complete",
+            "visual_tier": "t1",
+            "integration": "matched",
+            "judgment": "线上模型原始判断",
+            "confidence": 0.8,
+        } for definition in rules["modules"]]
+
+        reconciled, case_name = apply_regression_case_lock(
+            suggestions,
+            regression["visual_fingerprint"],
+            rules,
+        )
+        modules, total, stars = calculate_assessments(reconciled, rules)
+
+        self.assertEqual(case_name, "france_jersey_static_long_capture")
+        self.assertEqual({item["code"]: item["coefficient"] for item in modules}, regression["coefficients"])
+        self.assertEqual(total, 70.25)
+        self.assertEqual(stars, 5)
+        self.assertTrue(all("同源回归锁定" in item["judgment"] for item in reconciled))
+
     def test_async_job_worker_creates_evidence_and_auto_locked_version(self):
         user = get_user_model().objects.create_user("auto-reviewer", password="12345678")
         project = Project.objects.create(name="自动评分项目", owner=user)
@@ -1122,3 +1175,54 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(len(content), 4)  # one instruction + three 1400px slices
         self.assertIn("3 个连续切片", content[0]["text"])
         self.assertTrue(all(item["image_url"]["url"].startswith("data:image/jpeg;base64,") for item in content[1:]))
+
+    def test_chat_adapter_preserves_full_height_instead_of_globally_shrinking_long_pdp(self):
+        user = get_user_model().objects.create_user("full-height-adapter", password="12345678")
+        project = Project.objects.create(name="完整长图切片", owner=user)
+        source = PdpSource.objects.create(
+            project=project,
+            original_name="very-tall-pdp.png",
+            file=SimpleUploadedFile(
+                "very-tall-pdp.png",
+                valid_png_bytes(120, 9000),
+                content_type="image/png",
+            ),
+        )
+        adapter = OpenAIDiagnosisAdapter(client=SimpleNamespace(), runtime_config={
+            "model_name": "mimo-v2.5",
+            "protocol": "chat_completions",
+        })
+
+        urls = adapter._prepared_image_urls(source)
+        first_tile = Image.open(BytesIO(base64.b64decode(urls[0].split(",", 1)[1])))
+
+        self.assertEqual(len(urls), 7)
+        self.assertEqual(first_tile.width, 120)
+
+    def test_adapter_prompt_requires_distinct_boundary_evidence_rows(self):
+        rules = ScoringStandard.objects.get(version="pdp-v6").rules
+        instructions = OpenAIDiagnosisAdapter(client=SimpleNamespace())._instructions(rules)
+        self.assertIn("每一种独立 evidence_type 都必须单独返回一条证据", instructions)
+        self.assertIn("尺码表、模特数据、测量方法、版本对比必须分别返回", instructions)
+
+    def test_visual_fingerprint_ignores_png_compression_metadata(self):
+        user = get_user_model().objects.create_user("fingerprint-user", password="12345678")
+        project = Project.objects.create(name="视觉指纹", owner=user)
+        pixels = Image.new("RGB", (32, 64), color=(12, 34, 56))
+        first = BytesIO()
+        second = BytesIO()
+        pixels.save(first, format="PNG", compress_level=1)
+        pixels.save(second, format="PNG", compress_level=9)
+        source_a = PdpSource.objects.create(
+            project=project,
+            original_name="a.png",
+            file=SimpleUploadedFile("a.png", first.getvalue(), content_type="image/png"),
+        )
+        source_b = PdpSource.objects.create(
+            project=project,
+            original_name="b.png",
+            file=SimpleUploadedFile("b.png", second.getvalue(), content_type="image/png"),
+        )
+
+        self.assertNotEqual(first.getvalue(), second.getvalue())
+        self.assertEqual(_source_visual_fingerprint(source_a), _source_visual_fingerprint(source_b))

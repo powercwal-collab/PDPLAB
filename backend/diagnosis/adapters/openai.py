@@ -1,6 +1,7 @@
 import base64
 from io import BytesIO
 import json
+import math
 from pathlib import Path
 from typing import Literal
 
@@ -55,13 +56,13 @@ class PdpDiagnosisOutput(BaseModel):
 
 class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
     provider = "openai"
-    prompt_version = "pdp-score-openai-v7-unified-boundaries"
-    # Keep vision payloads comfortably below OpenAI-compatible gateways' request
-    # limits.  Long PDP images are represented as sequential slices rather than
-    # one enormous data URL, which also gives the model stable page coordinates.
+    prompt_version = "pdp-score-openai-v8-full-height-evidence"
+    # Preserve long-page text readability by constraining width only. Every
+    # resulting vertical slice is sent in order; if the explicit safety limit is
+    # exceeded, fail visibly instead of silently shrinking or omitting evidence.
     MAX_IMAGE_WIDTH = 960
-    MAX_TOTAL_HEIGHT = 8400
     SLICE_HEIGHT = 1400
+    MAX_IMAGE_SLICES = 24
     JPEG_QUALITY = 82
 
     def __init__(self, client=None, runtime_config=None):
@@ -100,6 +101,8 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             "对每个模块必须返回且只返回一条结果：0=弱，0.25=较弱，0.5=中，0.75=强，1=极强。"
             "不要计算总分或星级，服务端将用版本化评分规则计算。"
             "每个模块至少返回一条证据；若未观察到对应内容，必须返回一条 missing_content 证据并说明缺口。"
+            "用于满足同一模块多个边界条件时，每一种独立 evidence_type 都必须单独返回一条证据，禁止合并成一条泛化证据。"
+            "例如尺码表、模特数据、测量方法、版本对比必须分别返回；产品专属护理与退换边界也必须分别返回。"
             "evidence_type 必须从以下枚举中选择，不得使用 page_region 或自造类型："
             "missing_content、generic_or_decorative、empty_shell、template_block、generic_icon_row、hero_copy_only、logo_only、studio_model_view、"
             "product_hero_visual、campaign_cover、real_use_scene、lifestyle_scene、sport_scene、movement_scene、styling_scene、product_proof、detail_view、"
@@ -156,10 +159,16 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             image = ImageOps.exif_transpose(Image.open(source_file)).convert("RGB")
 
         width, height = image.size
-        scale = min(1, self.MAX_IMAGE_WIDTH / max(width, 1), self.MAX_TOTAL_HEIGHT / max(height, 1))
+        scale = min(1, self.MAX_IMAGE_WIDTH / max(width, 1))
         target_size = (max(1, round(width * scale)), max(1, round(height * scale)))
         if image.size != target_size:
             image = image.resize(target_size, Image.Resampling.LANCZOS)
+        slice_count = math.ceil(image.height / self.SLICE_HEIGHT)
+        if slice_count > self.MAX_IMAGE_SLICES:
+            raise ValueError(
+                f"图片完整切片需要 {slice_count} 段，超过安全上限 {self.MAX_IMAGE_SLICES} 段；"
+                "请拆分长图后重新上传，系统不会省略或压缩后续证据。"
+            )
 
         urls = []
         for top in range(0, image.height, self.SLICE_HEIGHT):

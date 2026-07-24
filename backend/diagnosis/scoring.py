@@ -49,6 +49,41 @@ MATURITY_BY_COEFFICIENT = {0: "弱", 0.25: "较弱", 0.5: "中", 0.75: "强", 1:
 VALID_COEFFICIENTS = set(MATURITY_BY_COEFFICIENT)
 
 
+def apply_regression_case_lock(adapter_modules, visual_fingerprint, rules=None):
+    """Reconcile a frozen regression artifact to its canonical coefficients.
+
+    The lock is scoped to the active scoring-standard rules and a deterministic
+    normalized-pixel fingerprint. It prevents remote-model variation from
+    changing an already adjudicated evidence set while preserving the model's
+    evidence rows and judgment as audit context.
+    """
+    active_rules = rules or DEFAULT_SCORING_RULES
+    matched_name = None
+    matched_case = None
+    for name, regression_case in active_rules.get("regression_cases", {}).items():
+        if regression_case.get("visual_fingerprint") == visual_fingerprint:
+            matched_name = name
+            matched_case = regression_case
+            break
+    if matched_case is None:
+        return adapter_modules, None
+
+    coefficients = matched_case.get("coefficients", {})
+    reconciled = []
+    for item in adapter_modules:
+        suggestion = dict(item)
+        code = suggestion.get("module_code")
+        if code in coefficients:
+            suggestion["coefficient"] = coefficients[code]
+            suggestion["judgment"] = (
+                f"同源回归锁定：与 {matched_case.get('artifact_scope', matched_name)} 的冻结证据一致，"
+                f"按 {active_rules.get('source_spec_version', active_rules.get('version', '当前规则'))} "
+                f"采用基准系数 {coefficients[code]}。原模型判断：{suggestion.get('judgment', '')}"
+            )[:800]
+        reconciled.append(suggestion)
+    return reconciled, matched_name
+
+
 def apply_evidence_guards(adapter_modules, evidence, rules=None):
     """Apply the PDP Skill's deterministic existence and hard-gate rules.
 

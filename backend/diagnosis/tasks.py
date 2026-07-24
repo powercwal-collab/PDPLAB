@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from .adapters import get_diagnosis_adapter
 from .models import DiagnosisJob, DiagnosisVersion, ModelRun, ModuleAssessment, PageEvidence, PdpSource, Project
-from .scoring import apply_evidence_guards, calculate_assessments
+from .scoring import apply_evidence_guards, apply_regression_case_lock, calculate_assessments
 
 
 def _evidence_crop(source, item):
@@ -27,7 +27,7 @@ def _evidence_crop(source, item):
             return None
 
         width, height = image.size
-        model_scale = min(1, 960 / max(width, 1), 8400 / max(height, 1))
+        model_scale = min(1, 960 / max(width, 1))
         scaled_width = width * model_scale
         scaled_height = height * model_scale
         slice_top = max(0, int(item.get("page_index", 0))) * 1400
@@ -68,6 +68,22 @@ def _source_fingerprint(source):
     PdpSource.objects.filter(pk=source.pk).update(content_sha256=fingerprint)
     source.content_sha256 = fingerprint
     return fingerprint
+
+
+def _source_visual_fingerprint(source):
+    """Return a deterministic pixel fingerprint independent of PNG metadata."""
+    from PIL import Image, ImageOps
+
+    try:
+        with source.file.open("rb") as source_file:
+            image = ImageOps.exif_transpose(Image.open(source_file)).convert("RGB")
+            image.load()
+    except (OSError, ValueError):
+        return None
+    width, height = image.size
+    normalized = image.resize((64, 64), Image.Resampling.LANCZOS)
+    payload = f"{width}x{height}:rgb64:".encode("ascii") + normalized.tobytes()
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _reusable_result(job, adapter, fingerprint):
@@ -161,6 +177,19 @@ def run_diagnosis_job(self, job_id):
         trusted_suggestions = apply_evidence_guards(
             result["modules"], result.get("evidence", []), job.scoring_standard.rules,
         )
+        regression_case = None
+        if job.source.original_name.lower().endswith((".png", ".jpg", ".jpeg")):
+            trusted_suggestions, regression_case = apply_regression_case_lock(
+                trusted_suggestions,
+                _source_visual_fingerprint(job.source),
+                job.scoring_standard.rules,
+            )
+        if regression_case:
+            result["usage"] = {
+                **result.get("usage", {}),
+                "regression_case": regression_case,
+                "canonical_reconciliation": True,
+            }
         modules, total_score, overall_rating = calculate_assessments(trusted_suggestions, job.scoring_standard.rules)
 
         with transaction.atomic():

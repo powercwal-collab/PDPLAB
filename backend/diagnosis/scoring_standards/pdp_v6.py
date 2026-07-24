@@ -2,9 +2,15 @@ PDP_V6_RULES = {
     "version": "pdp-v6",
     "source_skill": "pdp-detail-page-methodology",
     "source_mode": "versioned_runtime_rules",
-    "source_spec_version": "PDP Scoring Spec v4.2.0 (2026-07-24)",
-    "source_revision": "sha256:4abbf7358955324b300d20d51270ed5126f61f47d37bef4918b4486ef4878984",
-    "skill_manifest_revision": "sha256:ebb882576dab62bf593f5f117892b48bb993e6b5323db509b10aa60807d3f6ff",
+    "source_spec_version": "PDP Scoring Spec v4.2.1 (2026-07-24)",
+    "source_revision": "sha256:4179a02f0a373c8566fe0ce7c32cfbd4a037a38127b3701f9432d329dc337175",
+    "skill_manifest_revision": "sha256:bf393203f8bd2c075ca4414d0653aa96de4aedeebca33f173486c70d0142df7f",
+    "runtime_consistency": {
+        "long_image_policy": "width_only_resize_full_height_slices",
+        "distinct_evidence_rows": True,
+        "score_precision_decimals": 2,
+        "regression_fingerprint": "normalized_rgb_64_with_original_dimensions",
+    },
     "coefficients": {"弱": 0, "较弱": 0.25, "中": 0.5, "强": 0.75, "极强": 1},
     "maturity_definitions": {
         "弱": "无有效模块；标题、占位、通用模板、装饰素材或空壳不计入模块存在",
@@ -111,6 +117,7 @@ PDP_V6_RULES = {
     "regression_cases": {
         "france_jersey_static_long_capture": {
             "artifact_scope": "用户提供的法国队球衣静态长截图",
+            "visual_fingerprint": "f469f4e5be37b58dfcc84401058c5fb84d0a7dcd8e82b452f2513d0b8feaefc2",
             "coefficients": {
                 "product_kv": 1,
                 "scenario": 0.75,

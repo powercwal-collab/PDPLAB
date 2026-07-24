@@ -369,7 +369,11 @@ function AnimatedScore({ value, duration = 760 }) {
     const tick = (now) => {
       const progress = Math.min(1, (now - startedAt) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayValue(Math.round(numericValue * eased * 10) / 10);
+      setDisplayValue(
+        progress === 1
+          ? numericValue
+          : Math.round(numericValue * eased * 100) / 100,
+      );
       if (progress < 1) frameId = requestAnimationFrame(tick);
     };
     frameId = requestAnimationFrame(tick);
@@ -407,7 +411,7 @@ function buildGapItems(moduleList = []) {
     .map((module, index) => {
       const max = Number(module.max ?? module.weight ?? 0);
       const score = Number(module.score ?? 0);
-      const value = Math.max(0, Math.round((max - score) * 10) / 10);
+      const value = Math.max(0, Math.round((max - score) * 100) / 100);
       const fallback =
         modules.find(
           (item) => item.code === module.code || item.name === module.name,
@@ -566,7 +570,7 @@ export function App() {
         name: definition.name,
         short: fallback.short || definition.name,
         max: definition.weight,
-        score: Math.round(definition.weight * coefficient * 10) / 10,
+        score: Math.round(definition.weight * coefficient * 100) / 100,
         strong_standard: definition.strong_standard,
       };
     });
@@ -1750,8 +1754,8 @@ function Dashboard({
     Math.round(
       (Number(dashboardScore) +
         p0Tasks.reduce((sum, task) => sum + task.liftValue, 0)) *
-        10,
-    ) / 10,
+        100,
+    ) / 100,
   );
   const projectedBand = starBands?.find(
     (band) => projectedScore < Number(band.lt),
@@ -3155,8 +3159,8 @@ function TaskRoute({
     Math.round(
       (Number(currentScore) +
         p0Tasks.reduce((sum, task) => sum + task.liftValue, 0)) *
-        10,
-    ) / 10,
+        100,
+    ) / 100,
   );
   const projectedBand = starBands?.find(
     (band) => projectedScore < Number(band.lt),

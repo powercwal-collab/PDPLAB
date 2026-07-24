@@ -20,8 +20,15 @@ def _validate_remote_rules(rules):
         raise RuntimeError("远程 PDP Skill 必须使用弱/较弱/中/强/极强五档系数")
     if not rules.get("star_bands"):
         raise RuntimeError("远程 PDP Skill 缺少整体星级分段")
-    if rules.get("source_spec_version") != "PDP Scoring Spec v4.2.0 (2026-07-24)":
-        raise RuntimeError("远程 PDP Skill 必须使用统一的 PDP Scoring Spec v4.2.0")
+    if rules.get("source_spec_version") != "PDP Scoring Spec v4.2.1 (2026-07-24)":
+        raise RuntimeError("远程 PDP Skill 必须使用统一的 PDP Scoring Spec v4.2.1")
+    consistency = rules.get("runtime_consistency", {})
+    if (
+        consistency.get("long_image_policy") != "width_only_resize_full_height_slices"
+        or consistency.get("distinct_evidence_rows") is not True
+        or consistency.get("score_precision_decimals") != 2
+    ):
+        raise RuntimeError("远程 PDP Skill 缺少统一的长图、证据行或分数精度契约")
     boundary_locks = rules.get("boundary_locks", {})
     if not {"scenario", "fit_comparison", "service"}.issubset(boundary_locks):
         raise RuntimeError("远程 PDP Skill 缺少场景、尺码与服务模块的统一边界锁")
