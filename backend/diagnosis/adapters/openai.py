@@ -116,6 +116,7 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             "输出必须是单个 JSON 对象，顶层只允许 modules 与 evidence 两个数组，禁止用模块编码作为顶层键。"
             "modules 每项必须包含 module_code、coefficient、information_level、visual_tier、integration、judgment、confidence；"
             "evidence 每项必须包含 module_code、page_index、bbox、evidence_type、ocr_text、reason、confidence。"
+            "为避免冗长输出，judgment 与 reason 各不超过120个中文字符，ocr_text 不超过200个字符。"
             "特别注意：weight 是服务端权重，只供你理解重要性，绝对不能填入 coefficient。"
             "information_level 只能是 none/shallow/complete/proven；visual_tier 只能是 none/t2/t1/t0；integration 只能是 isolated/matched。"
             "判定关系：无有效模块=0；单一信息或视觉=0.25；信息+T2匹配=0.5；完整信息+T1匹配=0.75；完整可信信息+T0匹配=1。"
@@ -191,13 +192,27 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
     def _chat_completion_options(self):
         """Return provider-specific options without weakening output validation."""
         if self.model_name.strip().lower() == "kimi-k3":
-            # Kimi K3 only accepts temperature=1 and always reasons, so the
-            # legacy ``thinking.type=disabled`` option must not be sent.
-            return {"temperature": 1}
+            # Kimi K3 defaults to a 131072-token completion budget and always
+            # reasons. Do not override its fixed temperature or send the legacy
+            # K2.x ``thinking.type=disabled`` option.
+            return {"reasoning_effort": "high"}
         return {
+            "max_completion_tokens": 12000,
             "temperature": 0,
             "extra_body": {"thinking": {"type": "disabled"}},
         }
+
+    def _chat_response_format(self):
+        if self.model_name.strip().lower() == "kimi-k3":
+            return {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "pdp_diagnosis_output",
+                    "strict": True,
+                    "schema": PdpDiagnosisOutput.model_json_schema(),
+                },
+            }
+        return {"type": "json_object"}
 
     def _validate_output(self, parsed, scoring_rules):
         expected = [item["code"] for item in scoring_rules["modules"]]
@@ -264,11 +279,13 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
                     "business_context": context,
                     "scoring_rules": scoring_rules,
                 }),
-                response_format={"type": "json_object"},
-                max_completion_tokens=12000,
+                response_format=self._chat_response_format(),
                 **self._chat_completion_options(),
             )
-            raw_content = (response.choices[0].message.content or "").strip()
+            choice = response.choices[0]
+            if getattr(choice, "finish_reason", None) == "length":
+                raise ValueError("兼容模型输出达到 Token 上限，未返回完整的 PDP 诊断 JSON")
+            raw_content = (choice.message.content or "").strip()
             if raw_content.startswith("```"):
                 raw_content = raw_content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
             if not raw_content:

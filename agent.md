@@ -6,7 +6,17 @@
 
 本文件用于让后续 Agent 快速理解项目、区分 1.0 与 2.0、恢复指定版本，并继续完成设计或开发。不要在没有读取本文件和 `AGENTS.md` 的情况下大范围重构。
 
-## 当前激活版本：3.21（Moonshot 中国区 Kimi K3 参数修复版）
+## 当前激活版本：3.22（Kimi K3 完整结构化输出修复版）
+
+3.22 依据 Kimi 官方 API 文档修复长图诊断 JSON 被截断的问题：
+
+- Kimi K3 不再继承旧模型的 `max_completion_tokens=12000`；保留官方默认 131072-token 输出预算，避免 `finish_reason=length` 截断 JSON。
+- 不再显式传固定 temperature，使用顶层 `reasoning_effort=high`，并继续移除 K2.x 专属的 `thinking.type=disabled`。
+- Kimi K3 从 `json_object` 升级为官方推荐的严格 `json_schema` Structured Output；服务端仍以 Pydantic 和 PDP 评分门禁做最终验证。
+- 提示词限制 judgment、reason 和 OCR 摘要长度，控制用量；若模型仍返回 `finish_reason=length`，后端给出明确的 Token 上限错误，不再只暴露底层 EOF。
+- 生产失败任务 79 的原始错误为 Pydantic `Invalid JSON: EOF while parsing`，响应在第 6693 列被截断。
+
+## 历史版本：3.21（Moonshot 中国区 Kimi K3 参数修复版）
 
 3.21 根据生产 `https://api.moonshot.cn/v1` 的实际请求契约修正 Kimi K3 参数：
 
