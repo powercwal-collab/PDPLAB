@@ -221,7 +221,9 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             # K2.x ``thinking.type=disabled`` option.
             return {"reasoning_effort": "high"}
         options = {
-            "max_completion_tokens": 12000,
+            # Claude-compatible models may spend more than 10k tokens on a
+            # complex long-page diagnosis before finishing the JSON payload.
+            "max_completion_tokens": 24000 if normalized_model.startswith("claude") else 12000,
             "extra_body": {"thinking": {"type": "disabled"}},
         }
         # ModelVerse's Claude-compatible models reject the parameter entirely

@@ -1165,7 +1165,7 @@ class DiagnosisApiTests(TestCase):
 
         options = adapter._chat_completion_options()
 
-        self.assertEqual(options["max_completion_tokens"], 12000)
+        self.assertEqual(options["max_completion_tokens"], 24000)
         self.assertEqual(options["extra_body"], {"thinking": {"type": "disabled"}})
         self.assertNotIn("temperature", options)
 

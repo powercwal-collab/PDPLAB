@@ -6,7 +6,15 @@
 
 本文件用于让后续 Agent 快速理解项目、区分 1.0 与 2.0、恢复指定版本，并继续完成设计或开发。不要在没有读取本文件和 `AGENTS.md` 的情况下大范围重构。
 
-## 当前激活版本：3.26（ModelVerse Claude 参数兼容修复版）
+## 当前激活版本：3.27（ModelVerse Claude 长输出修复版）
+
+3.27 修复复杂长 PDP 在 `claude-fable-5` 的 12000 Token 上限处被截断的问题：
+
+- Claude-compatible Chat Completions 的输出预算提高到 24000；Gemini/MiMo 仍为 12000，Kimi K3 仍使用官方默认预算。
+- 生产成功样本已使用 10680 个输出 Token，失败任务 #93 在 12000 上限返回 `finish_reason=length`；生产探针确认 24000 参数返回 HTTP 200。
+- 服务端继续拒绝任何被截断的 JSON，不写入不完整评分。
+
+## 历史版本：3.26（ModelVerse Claude 参数兼容修复版）
 
 3.26 修复 ModelVerse `claude-fable-5` 拒绝旧 `temperature` 参数的问题：
 
