@@ -6,13 +6,21 @@
 
 本文件用于让后续 Agent 快速理解项目、区分 1.0 与 2.0、恢复指定版本，并继续完成设计或开发。不要在没有读取本文件和 `AGENTS.md` 的情况下大范围重构。
 
-## 当前激活版本：3.22（Kimi K3 完整结构化输出修复版）
+## 当前激活版本：3.23（Kimi K3 JSON Mode 兼容修复版）
+
+3.23 修正 3.22 的完整 Pydantic JSON Schema 与 Moonshot flavored JSON Schema 不兼容的问题：
+
+- Kimi K3 保留官方默认 131072-token 输出预算与 `reasoning_effort=high`，继续解决任务 79 的 JSON 截断根因。
+- 输出格式改回官方支持的 `json_object`，继续由 Pydantic 做完整类型校验、由 PDP 规则引擎做 11 模块与证据门禁。
+- 生产探针确认完整 Pydantic Schema 会因 coefficient 数值枚举缺少 Moonshot 要求的显式 type 而返回 400；简单 Schema 虽可用，但不能证明完整 PDP Schema 兼容。
+
+## 历史版本：3.22（Kimi K3 完整结构化输出修复版）
 
 3.22 依据 Kimi 官方 API 文档修复长图诊断 JSON 被截断的问题：
 
 - Kimi K3 不再继承旧模型的 `max_completion_tokens=12000`；保留官方默认 131072-token 输出预算，避免 `finish_reason=length` 截断 JSON。
 - 不再显式传固定 temperature，使用顶层 `reasoning_effort=high`，并继续移除 K2.x 专属的 `thinking.type=disabled`。
-- Kimi K3 从 `json_object` 升级为官方推荐的严格 `json_schema` Structured Output；服务端仍以 Pydantic 和 PDP 评分门禁做最终验证。
+- Kimi K3 曾尝试升级为严格 `json_schema` Structured Output；完整 Pydantic Schema 与 Moonshot flavored JSON Schema 不兼容，已由 3.23 回退为 `json_object`。
 - 提示词限制 judgment、reason 和 OCR 摘要长度，控制用量；若模型仍返回 `finish_reason=length`，后端给出明确的 Token 上限错误，不再只暴露底层 EOF。
 - 生产失败任务 79 的原始错误为 Pydantic `Invalid JSON: EOF while parsing`，响应在第 6693 列被截断。
 

@@ -955,7 +955,7 @@ class DiagnosisApiTests(TestCase):
         self.assertEqual(len(result["evidence"]), 11)
         self.assertEqual(result["usage"]["mode"], "chat_completions")
 
-    def test_kimi_k3_uses_default_budget_and_strict_schema(self):
+    def test_kimi_k3_uses_default_budget_and_json_mode(self):
         adapter = OpenAIDiagnosisAdapter(client=SimpleNamespace(), runtime_config={
             "model_name": "Kimi-K3",
             "protocol": "chat_completions",
@@ -968,10 +968,7 @@ class DiagnosisApiTests(TestCase):
         self.assertNotIn("temperature", options)
         self.assertNotIn("max_completion_tokens", options)
         self.assertNotIn("extra_body", options)
-        self.assertEqual(response_format["type"], "json_schema")
-        self.assertTrue(response_format["json_schema"]["strict"])
-        self.assertIn("modules", response_format["json_schema"]["schema"]["properties"])
-        self.assertIn("evidence", response_format["json_schema"]["schema"]["properties"])
+        self.assertEqual(response_format, {"type": "json_object"})
 
     def test_chat_adapter_slices_tall_pdp_before_sending_to_model(self):
         user = get_user_model().objects.create_user("slice-adapter", password="12345678")

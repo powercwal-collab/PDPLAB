@@ -203,15 +203,6 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
         }
 
     def _chat_response_format(self):
-        if self.model_name.strip().lower() == "kimi-k3":
-            return {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "pdp_diagnosis_output",
-                    "strict": True,
-                    "schema": PdpDiagnosisOutput.model_json_schema(),
-                },
-            }
         return {"type": "json_object"}
 
     def _validate_output(self, parsed, scoring_rules):
