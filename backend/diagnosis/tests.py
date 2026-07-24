@@ -947,9 +947,22 @@ class DiagnosisApiTests(TestCase):
         result = adapter.analyze(source=source, context={"channel": "tmall"}, scoring_rules=rules)
         content = completions.kwargs["messages"][1]["content"]
         self.assertTrue(content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,"))
+        self.assertEqual(completions.kwargs["temperature"], 0)
+        self.assertEqual(completions.kwargs["extra_body"], {"thinking": {"type": "disabled"}})
         self.assertEqual(len(result["modules"]), 11)
         self.assertEqual(len(result["evidence"]), 11)
         self.assertEqual(result["usage"]["mode"], "chat_completions")
+
+    def test_kimi_k3_uses_required_temperature_without_disabling_thinking(self):
+        adapter = OpenAIDiagnosisAdapter(client=SimpleNamespace(), runtime_config={
+            "model_name": "Kimi-K3",
+            "protocol": "chat_completions",
+        })
+
+        options = adapter._chat_completion_options()
+
+        self.assertEqual(options, {"temperature": 0.6})
+        self.assertNotIn("extra_body", options)
 
     def test_chat_adapter_slices_tall_pdp_before_sending_to_model(self):
         user = get_user_model().objects.create_user("slice-adapter", password="12345678")

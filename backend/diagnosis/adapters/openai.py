@@ -188,6 +188,17 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
             } for image_url in image_urls],
         }]
 
+    def _chat_completion_options(self):
+        """Return provider-specific options without weakening output validation."""
+        if self.model_name.strip().lower() == "kimi-k3":
+            # Kimi K3 only accepts temperature=0.6 and always reasons, so the
+            # legacy ``thinking.type=disabled`` option must not be sent.
+            return {"temperature": 0.6}
+        return {
+            "temperature": 0,
+            "extra_body": {"thinking": {"type": "disabled"}},
+        }
+
     def _validate_output(self, parsed, scoring_rules):
         expected = [item["code"] for item in scoring_rules["modules"]]
         module_codes = [item.module_code for item in parsed.modules]
@@ -255,8 +266,7 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
                 }),
                 response_format={"type": "json_object"},
                 max_completion_tokens=12000,
-                temperature=0,
-                extra_body={"thinking": {"type": "disabled"}},
+                **self._chat_completion_options(),
             )
             raw_content = (response.choices[0].message.content or "").strip()
             if raw_content.startswith("```"):
