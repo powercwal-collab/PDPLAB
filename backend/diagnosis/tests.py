@@ -11,7 +11,17 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
-from .models import AiModelSettings, DiagnosisJob, DiagnosisVersion, PdpSkillSettings, PdpSource, Project, ScoringStandard, UserProfile
+from .models import (
+    AiModelSettings,
+    DiagnosisJob,
+    DiagnosisVersion,
+    PageEvidence,
+    PdpSkillSettings,
+    PdpSource,
+    Project,
+    ScoringStandard,
+    UserProfile,
+)
 from .adapters.openai import EvidenceSuggestion, ModuleSuggestion, OpenAIDiagnosisAdapter, PdpDiagnosisOutput
 from .runtime_config import get_runtime_integration_config
 from .scoring import apply_evidence_guards, calculate_assessments, map_overall_rating
@@ -27,6 +37,13 @@ def valid_png_bytes(width=1, height=1):
 
 
 class DiagnosisApiTests(TestCase):
+    def test_evidence_type_field_fits_longest_supported_classifier(self):
+        field = PageEvidence._meta.get_field("evidence_type")
+        self.assertGreaterEqual(
+            field.max_length,
+            len("pagewide_designed_model_product_sequence"),
+        )
+
     def test_root_redirects_to_frontend(self):
         response = self.client.get(reverse("home"))
         self.assertRedirects(

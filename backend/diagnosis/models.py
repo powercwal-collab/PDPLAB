@@ -167,7 +167,7 @@ class PageEvidence(models.Model):
     module_code = models.CharField("模块编码", max_length=64)
     page_index = models.PositiveIntegerField("页码", default=0)
     bbox = models.JSONField("页面坐标", default=dict, blank=True)
-    evidence_type = models.CharField("证据类型", max_length=32, default="page_region")
+    evidence_type = models.CharField("证据类型", max_length=64, default="page_region")
     ocr_text = models.TextField("识别文字", blank=True)
     crop_image = models.FileField("证据截图", upload_to="pdp_evidence/%Y/%m/", blank=True)
     model_reason = models.TextField("模型解释", blank=True)
