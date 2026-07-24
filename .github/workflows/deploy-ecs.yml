@@ -96,7 +96,9 @@ jobs:
         run: |
           set -euo pipefail
           cd /srv/pdp-lab/releases
-          ls -1dt */ | tail -n +6 | xargs -r rm -rf
+          if ! ls -1dt */ | tail -n +6 | xargs -r rm -rf; then
+            echo "::warning::旧发布目录权限不足，本次保留清理未完成；当前发布不受影响。"
+          fi
 
       - name: Publish deployment summary
         if: always()
