@@ -961,7 +961,7 @@ class DiagnosisApiTests(TestCase):
 
         options = adapter._chat_completion_options()
 
-        self.assertEqual(options, {"temperature": 0.6})
+        self.assertEqual(options, {"temperature": 1})
         self.assertNotIn("extra_body", options)
 
     def test_chat_adapter_slices_tall_pdp_before_sending_to_model(self):

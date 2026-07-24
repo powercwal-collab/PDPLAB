@@ -191,9 +191,9 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
     def _chat_completion_options(self):
         """Return provider-specific options without weakening output validation."""
         if self.model_name.strip().lower() == "kimi-k3":
-            # Kimi K3 only accepts temperature=0.6 and always reasons, so the
+            # Kimi K3 only accepts temperature=1 and always reasons, so the
             # legacy ``thinking.type=disabled`` option must not be sent.
-            return {"temperature": 0.6}
+            return {"temperature": 1}
         return {
             "temperature": 0,
             "extra_body": {"thinking": {"type": "disabled"}},

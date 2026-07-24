@@ -6,12 +6,20 @@
 
 本文件用于让后续 Agent 快速理解项目、区分 1.0 与 2.0、恢复指定版本，并继续完成设计或开发。不要在没有读取本文件和 `AGENTS.md` 的情况下大范围重构。
 
-## 当前激活版本：3.20（Kimi K3 请求兼容修复版）
+## 当前激活版本：3.21（Moonshot 中国区 Kimi K3 参数修复版）
+
+3.21 根据生产 `https://api.moonshot.cn/v1` 的实际请求契约修正 Kimi K3 参数：
+
+- 生产网关明确要求 `kimi-k3` 使用 `temperature=1`，替换 3.20 中不适用于当前中国区端点的 `0.6`。
+- Kimi K3 仍不发送 `thinking.type=disabled`，11 模块结构化输出与服务端评分门禁保持不变。
+- 生产失败任务 78 的原始错误为 `invalid temperature: only 1 is allowed for this model`，本版本以网关实时响应为准。
+
+## 历史版本：3.20（Kimi K3 请求兼容修复版）
 
 3.20 修复 Moonshot Kimi K3 经 OpenAI 兼容 Chat Completions 接入时的参数冲突，不改变 PDP 评分规则或历史诊断：
 
 - 后台模型名称必须使用 API ID `kimi-k3`，而不是展示名 `Kimi K3`。
-- Kimi K3 请求使用服务端唯一允许的 `temperature=0.6`。
+- Kimi K3 请求最初按 `temperature=0.6` 接入；生产中国区端点随后明确要求 `1`，已由 3.21 修正。
 - Kimi K3 为强制推理模型，请求不再发送旧模型专用的 `thinking.type=disabled`；其他 Chat Completions 模型继续保持原有参数。
 - 新增模型专属参数回归测试，结构化 11 模块输出与服务端评分门禁保持不变。
 
