@@ -1157,6 +1157,18 @@ class DiagnosisApiTests(TestCase):
         self.assertNotIn("extra_body", options)
         self.assertEqual(response_format, {"type": "json_object"})
 
+    def test_claude_compatible_model_omits_deprecated_temperature(self):
+        adapter = OpenAIDiagnosisAdapter(client=SimpleNamespace(), runtime_config={
+            "model_name": "claude-fable-5",
+            "protocol": "chat_completions",
+        })
+
+        options = adapter._chat_completion_options()
+
+        self.assertEqual(options["max_completion_tokens"], 12000)
+        self.assertEqual(options["extra_body"], {"thinking": {"type": "disabled"}})
+        self.assertNotIn("temperature", options)
+
     def test_chat_adapter_slices_tall_pdp_before_sending_to_model(self):
         user = get_user_model().objects.create_user("slice-adapter", password="12345678")
         project = Project.objects.create(name="切片适配器", owner=user)

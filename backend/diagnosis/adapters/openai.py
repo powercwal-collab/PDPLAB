@@ -214,16 +214,22 @@ class OpenAIDiagnosisAdapter(DiagnosisModelAdapter):
 
     def _chat_completion_options(self):
         """Return provider-specific options without weakening output validation."""
-        if self.model_name.strip().lower() == "kimi-k3":
+        normalized_model = self.model_name.strip().lower()
+        if normalized_model == "kimi-k3":
             # Kimi K3 defaults to a 131072-token completion budget and always
             # reasons. Do not override its fixed temperature or send the legacy
             # K2.x ``thinking.type=disabled`` option.
             return {"reasoning_effort": "high"}
-        return {
+        options = {
             "max_completion_tokens": 12000,
-            "temperature": 0,
             "extra_body": {"thinking": {"type": "disabled"}},
         }
+        # ModelVerse's Claude-compatible models reject the parameter entirely
+        # with "`temperature` is deprecated for this model." Keep the stable
+        # deterministic setting for providers that still accept it.
+        if not normalized_model.startswith("claude"):
+            options["temperature"] = 0
+        return options
 
     def _chat_response_format(self):
         return {"type": "json_object"}

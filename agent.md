@@ -6,7 +6,15 @@
 
 本文件用于让后续 Agent 快速理解项目、区分 1.0 与 2.0、恢复指定版本，并继续完成设计或开发。不要在没有读取本文件和 `AGENTS.md` 的情况下大范围重构。
 
-## 当前激活版本：3.25（长证据类型持久化修复版）
+## 当前激活版本：3.26（ModelVerse Claude 参数兼容修复版）
+
+3.26 修复 ModelVerse `claude-fable-5` 拒绝旧 `temperature` 参数的问题：
+
+- 模型 ID 以 `claude` 开头的 Chat Completions 请求不再发送已废弃的 `temperature`。
+- 保留已通过生产探针的 `json_object`、12000-token 输出上限和 `thinking.type=disabled`；Kimi、Gemini 与 MiMo 参数分支不变。
+- 生产最小探针确认移除 `temperature` 后返回 HTTP 200 和合法 JSON；新增模型专属参数回归测试。
+
+## 历史版本：3.25（长证据类型持久化修复版）
 
 3.25 修复 PDP v6 的长证据分类名称在 PostgreSQL 写入时超过旧 32 字符字段上限的问题：
 
